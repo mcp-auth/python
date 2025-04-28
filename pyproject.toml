@@ -1,5 +1,5 @@
 [project]
-name = "mcp-auth"
+name = "mcpauth"
 version = "0.0.0"
 description = "Connect your MCP server to any eligible OAuth 2 or OpenID Connect provider"
 authors = [{ name = "Silverhand Inc.", email = "contact@silverhand.io" }]
@@ -13,7 +13,7 @@ keywords = [
   "oauth2",
   "openid-connect",
 ]
-dependencies = ["pyjwt[crypto]>=2.9.0"]
+dependencies = ["pydantic>=2.11.3", "pyjwt[crypto]>=2.9.0"]
 
 [project.urls]
 homepage = "https://mcp-auth.dev"
