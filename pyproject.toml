@@ -21,4 +21,8 @@ repository = "https://github.com/mcp-auth/python"
 documentation = "https://mcp-auth.dev/docs"
 
 [dependency-groups]
-dev = ["black>=24.8.0"]
+dev = [
+    "black>=24.8.0",
+ "pytest>=8.3.5",
+ "pytest-cov>=6.1.1",
+]

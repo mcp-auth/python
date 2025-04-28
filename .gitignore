@@ -5,6 +5,11 @@ build/
 dist/
 wheels/
 *.egg-info
+.coverage
+htmlcov
 
 # Virtual environments
 .venv
+
+# Miscellaneous
+.DS_Store
