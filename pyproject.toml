@@ -1,0 +1,24 @@
+[project]
+name = "mcp-auth"
+version = "0.0.0"
+description = "Connect your MCP server to any eligible OAuth 2 or OpenID Connect provider"
+authors = [{ name = "Silverhand Inc.", email = "contact@silverhand.io" }]
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+keywords = [
+  "authentication",
+  "authorization",
+  "mcp",
+  "oauth2",
+  "openid-connect",
+]
+dependencies = ["pyjwt[crypto]>=2.9.0"]
+
+[project.urls]
+homepage = "https://mcp-auth.dev"
+repository = "https://github.com/mcp-auth/python"
+documentation = "https://mcp-auth.dev/docs"
+
+[dependency-groups]
+dev = ["black>=24.8.0"]
