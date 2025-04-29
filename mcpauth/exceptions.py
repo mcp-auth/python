@@ -1,8 +1,8 @@
 from enum import Enum
 from pydantic import BaseModel
-from typing import Any, Optional, List, Dict, Union
+from typing import Optional, List, Dict, Union
+from .types import Record
 
-Record = Dict[str, Any]
 ExceptionCause = Optional[Union[Record, Exception]]
 
 
