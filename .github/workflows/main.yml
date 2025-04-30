@@ -1,0 +1,25 @@
+name: Main
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  main:
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Test with python ${{ matrix.python-version }}
+        run: uv run --frozen pytest
