@@ -75,7 +75,7 @@ class AuthInfo(BaseModel):
     - https://datatracker.ietf.org/doc/html/rfc8707
     """
 
-    claims: Optional[Dict[str, Any]]
+    claims: Dict[str, Any]
     """
     The raw claims from the token, which can include any additional information provided by the
     token issuer.

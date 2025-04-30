@@ -51,8 +51,6 @@ def get_bearer_token_from_headers(headers: Headers) -> str:
 
     auth_header = headers.get("authorization") or headers.get("Authorization")
 
-    print(f"Authorization header: {auth_header}")
-
     if not auth_header:
         raise MCPAuthBearerAuthException(BearerAuthExceptionCode.MISSING_AUTH_HEADER)
 
