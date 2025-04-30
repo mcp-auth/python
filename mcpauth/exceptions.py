@@ -34,7 +34,15 @@ class MCPAuthException(Exception):
         data: Record = {
             "error": self.code.value if isinstance(self.code, Enum) else self.code,
             "error_description": self.message,
-            "cause": self.cause if show_cause and hasattr(self, "cause") else None,
+            "cause": (
+                (
+                    {k: v for k, v in self.cause.model_dump().items() if v is not None}
+                    if isinstance(self.cause, BaseModel)
+                    else str(self.cause)
+                )
+                if show_cause and hasattr(self, "cause")
+                else None
+            ),
         }
         return {k: v for k, v in data.items() if v is not None}
 
@@ -99,8 +107,8 @@ class MCPAuthBearerAuthExceptionDetails(BaseModel):
     cause: Any = None
     uri: Optional[str] = None
     missing_scopes: Optional[List[str]] = None
-    expected: Optional[Union[str, Record]] = None
-    actual: Optional[Union[str, Record]] = None
+    expected: Any = None
+    actual: Any = None
 
 
 class MCPAuthBearerAuthException(MCPAuthException):
@@ -124,15 +132,15 @@ class MCPAuthBearerAuthException(MCPAuthException):
 
     def to_json(self, show_cause: bool = False) -> Dict[str, Optional[str]]:
         # Matches the OAuth 2.0 exception response format at best effort
-        result = super().to_json(show_cause)
+        data = super().to_json(show_cause)
         if self.cause:
-            result.update(
+            data.update(
                 {
                     "error_uri": self.cause.uri,
                     "missing_scopes": self.cause.missing_scopes,
                 }
             )
-        return result
+        return {k: v for k, v in data.items() if v is not None}
 
 
 class MCPAuthJwtVerificationExceptionCode(str, Enum):

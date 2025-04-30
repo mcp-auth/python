@@ -28,7 +28,7 @@ class TestMCPAuthException:
         assert mcp_exception.to_json(show_cause=True) == {
             "error": "test_code",
             "error_description": "Test message",
-            "cause": exception,
+            "cause": str(exception),
         }
 
     def test_properties(self):

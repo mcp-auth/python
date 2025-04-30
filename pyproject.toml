@@ -13,7 +13,12 @@ keywords = [
   "oauth2",
   "openid-connect",
 ]
-dependencies = ["aiohttp>=3.11.18", "pydantic>=2.11.3", "pyjwt[crypto]>=2.9.0"]
+dependencies = [
+  "aiohttp>=3.11.18",
+  "pydantic>=2.11.3",
+  "pyjwt[crypto]>=2.9.0",
+  "starlette>=0.46.2",
+]
 
 [project.urls]
 homepage = "https://mcp-auth.dev"
