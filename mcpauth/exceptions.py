@@ -146,7 +146,6 @@ class MCPAuthBearerAuthException(MCPAuthException):
 class MCPAuthJwtVerificationExceptionCode(str, Enum):
     INVALID_JWT = "invalid_jwt"
     JWT_VERIFICATION_FAILED = "jwt_verification_failed"
-    JWT_EXPIRED = "jwt_expired"
 
 
 jwt_verification_exception_description: Dict[
@@ -154,7 +153,6 @@ jwt_verification_exception_description: Dict[
 ] = {
     MCPAuthJwtVerificationExceptionCode.INVALID_JWT: "The provided JWT is invalid or malformed.",
     MCPAuthJwtVerificationExceptionCode.JWT_VERIFICATION_FAILED: "JWT verification failed. The token could not be verified.",
-    MCPAuthJwtVerificationExceptionCode.JWT_EXPIRED: "The provided JWT has expired.",
 }
 
 
