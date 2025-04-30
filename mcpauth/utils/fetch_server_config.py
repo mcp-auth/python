@@ -8,7 +8,11 @@ from pathlib import Path
 from ..types import Record
 from ..models.oauth import AuthorizationServerMetadata
 from ..models.auth_server import AuthServerConfig, AuthServerType
-from ..exceptions import MCPAuthConfigException
+from ..exceptions import (
+    AuthServerExceptionCode,
+    MCPAuthAuthServerException,
+    MCPAuthConfigException,
+)
 
 
 class ServerMetadataPaths(str, Enum):
@@ -22,6 +26,11 @@ class ServerMetadataPaths(str, Enum):
 
 
 def smart_join(*args: str) -> str:
+    """
+    Joins multiple path components into a single path string, regardless of leading or trailing
+    slashes.
+    """
+
     return Path("/".join(arg.strip("/") for arg in args)).as_posix()
 
 
@@ -42,6 +51,23 @@ async def fetch_server_config_by_well_known_url(
     type: AuthServerType,
     transpile_data: Optional[Callable[[Record], Record]] = None,
 ) -> AuthServerConfig:
+    """
+    Fetches the server configuration from the provided well-known URL and validates it against the
+    MCP specification.
+
+    If the server metadata does not conform to the expected schema, but you are sure that it is
+    compatible, you can provide a `transpile_data` function to transform the metadata into the
+    expected format.
+
+    :param well_known_url: The well-known URL to fetch the server configuration from.
+    :param type: The type of the authorization server (OAuth or OIDC).
+    :param transpile_data: Optional function to transform the fetched data into the expected
+    format.
+    :return AuthServerConfig: An instance of `AuthServerConfig` containing the server metadata.
+    :raises MCPAuthConfigException: If there is an error fetching the server metadata.
+    :raises MCPAuthAuthServerException: If the server metadata is invalid or malformed.
+    """
+
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(well_known_url) as response:
@@ -52,9 +78,8 @@ async def fetch_server_config_by_well_known_url(
                     metadata=AuthorizationServerMetadata(**transpiled_data), type=type
                 )
     except pydantic.ValidationError as e:
-        raise MCPAuthConfigException(
-            "invalid_server_metadata",
-            f"Invalid server metadata from {well_known_url}: {str(e)}",
+        raise MCPAuthAuthServerException(
+            AuthServerExceptionCode.INVALID_SERVER_METADATA,
             cause=e,
         ) from e
     except Exception as e:
@@ -70,6 +95,47 @@ async def fetch_server_config(
     type: AuthServerType,
     transpile_data: Optional[Callable[[Record], Record]] = None,
 ) -> AuthServerConfig:
+    """
+    Fetches the server configuration according to the issuer and authorization server type.
+
+    This function automatically determines the well-known URL based on the server type, as OAuth
+    and OpenID Connect servers have different conventions for their metadata endpoints.
+
+    See Also:
+    - `fetchServerConfigByWellKnownUrl` for the underlying implementation.
+    - https://www.rfc-editor.org/rfc/rfc8414 for the OAuth 2.0 Authorization Server Metadata
+    specification.
+    - https://openid.net/specs/openid-connect-discovery-1_0.html for the OpenID Connect Discovery
+    specification.
+
+    Example:
+    ```python
+    from mcpauth.utils import fetch_server_config, AuthServerType
+
+    # Fetch OAuth server config. This will fetch the metadata from
+    # `https://auth.logto.io/.well-known/oauth-authorization-server/oauth`
+    oauth_config = await fetch_server_config(
+        issuer="https://auth.logto.io/oauth",
+        type=AuthServerType.OAUTH
+    )
+
+    # Fetch OIDC server config. This will fetch the metadata from
+    # `https://auth.logto.io/oidc/.well-known/openid-configuration`
+    oidc_config = await fetch_server_config(
+        issuer="https://auth.logto.io/oidc",
+        type=AuthServerType.OIDC
+    )
+    ```
+
+    :param issuer: The issuer URL of the authorization server.
+    :param type: The type of the authorization server (OAuth or OIDC).
+    :param transpile_data: Optional function to transform the fetched data into the expected
+    format.
+    :return AuthServerConfig: An instance of `AuthServerConfig` containing the server metadata.
+    :raises MCPAuthConfigException: If there is an error fetching the server metadata.
+    :raises MCPAuthAuthServerException: If the server metadata is invalid or malformed.
+    """
+
     well_known_url = (
         get_oauth_well_known_url(issuer)
         if type == AuthServerType.OAUTH

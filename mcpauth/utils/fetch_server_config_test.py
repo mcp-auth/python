@@ -3,7 +3,7 @@ from aresponses import ResponsesMockServer
 from aiohttp.web_response import Response
 
 from mcpauth.models.auth_server import AuthServerType
-from mcpauth.exceptions import MCPAuthConfigException
+from mcpauth.exceptions import MCPAuthAuthServerException, MCPAuthConfigException
 from mcpauth.types import Record
 from mcpauth.utils.fetch_server_config import (
     ServerMetadataPaths,
@@ -44,12 +44,12 @@ class TestFetchServerConfigByWellKnownUrl:
             "example.com", ServerMetadataPaths.OAUTH.value, "GET", response={}
         )
 
-        with pytest.raises(MCPAuthConfigException) as exc_info:
+        with pytest.raises(MCPAuthAuthServerException) as exc_info:
             await fetch_server_config_by_well_known_url(
                 sample_well_known_url, AuthServerType.OAUTH
             )
 
-        assert "Invalid server metadata" in str(exc_info.value)
+        assert "The server metadata is invalid or malformed" in str(exc_info.value)
 
     async def test_fetch_server_config_by_well_known_url_malformed_metadata(
         self, aresponses: ResponsesMockServer
@@ -67,12 +67,12 @@ class TestFetchServerConfigByWellKnownUrl:
             "example.com", ServerMetadataPaths.OAUTH.value, "GET", sample_response
         )
 
-        with pytest.raises(MCPAuthConfigException) as exc_info:
+        with pytest.raises(MCPAuthAuthServerException) as exc_info:
             await fetch_server_config_by_well_known_url(
                 sample_well_known_url, AuthServerType.OAUTH
             )
 
-        assert "Invalid server metadata" in str(exc_info.value)
+        assert "The server metadata is invalid or malformed" in str(exc_info.value)
 
     async def test_fetch_server_config_by_well_known_url_success_with_transpile(
         self, aresponses: ResponsesMockServer

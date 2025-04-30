@@ -1,9 +1,9 @@
 from enum import Enum
 from pydantic import BaseModel
-from typing import Optional, List, Dict, Union
+from typing import Any, Optional, List, Dict, Union
 from .types import Record
 
-ExceptionCause = Optional[Union[Record, Exception]]
+ExceptionCause = Optional[Union[Record, Exception, BaseModel]]
 
 
 class MCPAuthException(Exception):
@@ -63,7 +63,7 @@ class MCPAuthAuthServerException(MCPAuthException):
     Exception thrown when there is an issue with the remote authorization server.
     """
 
-    def __init__(self, code: AuthServerExceptionCode, cause: Optional[Record] = None):
+    def __init__(self, code: AuthServerExceptionCode, cause: ExceptionCause = None):
         super().__init__(
             code.value,
             auth_server_exception_description.get(
@@ -96,7 +96,7 @@ bearer_auth_exception_description: Dict[BearerAuthExceptionCode, str] = {
 
 
 class MCPAuthBearerAuthExceptionDetails(BaseModel):
-    cause: Optional[Record] = None
+    cause: Any = None
     uri: Optional[str] = None
     missing_scopes: Optional[List[str]] = None
     expected: Optional[Union[str, Record]] = None
@@ -156,7 +156,7 @@ class MCPAuthJwtVerificationException(MCPAuthException):
     """
 
     def __init__(
-        self, code: MCPAuthJwtVerificationExceptionCode, cause: Optional[Record] = None
+        self, code: MCPAuthJwtVerificationExceptionCode, cause: ExceptionCause = None
     ):
         super().__init__(
             code.value,
