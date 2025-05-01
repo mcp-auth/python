@@ -18,21 +18,39 @@ from ..exceptions import (
 from ..types import VerifyAccessTokenFunction, Record
 
 
-class BearerAuthConfig(BaseModel):
+class BaseBearerAuthConfig(BaseModel):
+    """
+    Base configuration for the Bearer auth handler.
+    """
+
+    audience: Optional[str] = None
+    """
+    The expected audience of the access token. If not provided, no audience check is performed.
+    """
+
+    required_scopes: Optional[List[str]] = None
+    """
+    An array of required scopes that the access token must have. If not provided, no scope check is
+    performed.
+    """
+
+    show_error_details: bool = False
+    """
+    Whether to show detailed error information in the response. Defaults to False.
+    If True, detailed error information will be included in the response body for debugging
+    purposes.
+    """
+
+
+class BearerAuthConfig(BaseBearerAuthConfig):
     """
     Configuration for the Bearer auth handler.
-
-    Attributes:
-      issuer: The expected issuer of the access token.
-      audience: The expected audience of the access token.
-      required_scopes: An array of required scopes that the access token must have.
-      show_error_details: Whether to show detailed error information in the response.
     """
 
     issuer: str
-    audience: Optional[str] = None
-    required_scopes: Optional[List[str]] = None
-    show_error_details: bool = False
+    """
+    The expected issuer of the access token. This should be a valid URL.
+    """
 
 
 def get_bearer_token_from_headers(headers: Headers) -> str:
