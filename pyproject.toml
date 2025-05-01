@@ -14,9 +14,9 @@ keywords = [
   "openid-connect",
 ]
 dependencies = [
-  "aiohttp>=3.11.18",
   "pydantic>=2.11.3",
   "pyjwt[crypto]>=2.9.0",
+  "requests>=2.32.3",
   "starlette>=0.46.2",
 ]
 
@@ -27,9 +27,14 @@ documentation = "https://mcp-auth.dev/docs"
 
 [dependency-groups]
 dev = [
-  "aresponses>=3.0.0",
   "black>=24.8.0",
   "pytest>=8.3.5",
   "pytest-asyncio>=0.26.0",
   "pytest-cov>=6.1.1",
+  "responses>=0.25.7",
+  "uvicorn>=0.34.2",
 ]
+
+[tool.coverage.run]
+branch = true
+source = ["mcpauth"]

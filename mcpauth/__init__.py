@@ -3,16 +3,23 @@ from typing import Any, Literal, Union
 
 from .middleware.create_bearer_auth import BaseBearerAuthConfig, BearerAuthConfig
 from .types import VerifyAccessTokenFunction
-from .utils.fetch_server_config import ServerMetadataPaths
 from .config import MCPAuthConfig
 from .exceptions import MCPAuthAuthServerException, AuthServerExceptionCode
-from .utils.validate_server_config import validate_server_config
-from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
-from starlette.requests import Request
-from starlette.responses import Response, JSONResponse
+from .utils import validate_server_config
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
 
 
 class MCPAuth:
+    """
+    The main class for the mcp-auth library, which provides methods for creating middleware
+    functions for handling OAuth 2.0-related tasks and bearer token auth.
+
+    See Also: https://mcp-auth.dev for more information about the library and its usage.
+
+    :param config: An instance of `MCPAuthConfig` containing the server configuration.
+    """
+
     def __init__(self, config: MCPAuthConfig):
         result = validate_server_config(config.server)
 
@@ -32,41 +39,24 @@ class MCPAuth:
 
         self.config = config
 
-    def delegated_middleware(self) -> type[BaseHTTPMiddleware]:
+    def metadata_response(self) -> JSONResponse:
         """
-        Returns a middleware that handles OAuth 2.0 Authorization Metadata endpoint
-        (`/.well-known/oauth-authorization-server`) with CORS support (delegated mode).
-
-        :return: A middleware class that can be used in a Starlette or FastAPI application.
+        Returns a response containing the server metadata in JSON format with CORS support.
         """
         server_config = self.config.server
 
-        class DelegatedMiddleware(BaseHTTPMiddleware):
-            async def dispatch(
-                self, request: Request, call_next: RequestResponseEndpoint
-            ) -> Response:
-                path = request.url.path
-                if path == ServerMetadataPaths.OAUTH:
-                    response = JSONResponse(
-                        {
-                            k: v
-                            for k, v in server_config.metadata.model_dump().items()
-                            if v is not None
-                        },
-                        status_code=200,
-                    )
-                    response.headers["Access-Control-Allow-Origin"] = "*"
-                    response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-                    return response
-                else:
-                    return await call_next(request)
-
-        return DelegatedMiddleware
+        response = JSONResponse(
+            server_config.metadata.model_dump(exclude_none=True),
+            status_code=200,
+        )
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+        return response
 
     def bearer_auth_middleware(
         self,
         mode_or_verify: Union[Literal["jwt"], VerifyAccessTokenFunction],
-        config: BaseBearerAuthConfig,
+        config: BaseBearerAuthConfig = BaseBearerAuthConfig(),
         jwt_options: dict[str, Any] = {},
     ) -> type[BaseHTTPMiddleware]:
         """
@@ -83,7 +73,7 @@ class MCPAuth:
 
         metadata = self.config.server.metadata
         if isinstance(mode_or_verify, str) and mode_or_verify == "jwt":
-            from .utils.create_verify_jwt import create_verify_jwt
+            from .utils import create_verify_jwt
 
             if not metadata.jwks_uri:
                 raise MCPAuthAuthServerException(

@@ -1,7 +1,5 @@
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
-from starlette.requests import Request
-from starlette.responses import Response
+from unittest.mock import patch, MagicMock
 from mcpauth import MCPAuth, MCPAuthAuthServerException, AuthServerExceptionCode
 from mcpauth.config import MCPAuthConfig
 from mcpauth.models.auth_server import AuthServerConfig, AuthServerType
@@ -77,9 +75,8 @@ class TestMCPAuth:
         assert mock_warning.called
 
 
-class TestDelegatedMiddleware:
-    @pytest.mark.asyncio
-    async def test_delegated_middleware_oauth_endpoint(self):
+class TestOAuthMetadataResponse:
+    def test_metadata_response(self):
         # Setup
         server_config = AuthServerConfig(
             type=AuthServerType.OAUTH,
@@ -95,52 +92,13 @@ class TestDelegatedMiddleware:
         config = MCPAuthConfig(server=server_config)
         auth = MCPAuth(config)
 
-        middleware_class = auth.delegated_middleware()
-        middleware = middleware_class(app=MagicMock())
-
-        mock_request = MagicMock(spec=Request)
-        mock_request.url.path = "/.well-known/oauth-authorization-server"
-
         # Exercise
-        response = await middleware.dispatch(mock_request, call_next=AsyncMock())
+        response = auth.metadata_response()
 
         # Verify
         assert response.status_code == 200
         assert response.headers["Access-Control-Allow-Origin"] == "*"
         assert response.headers["Access-Control-Allow-Methods"] == "GET, OPTIONS"
-
-    @pytest.mark.asyncio
-    async def test_delegated_middleware_other_endpoint(self):
-        # Setup
-        server_config = AuthServerConfig(
-            type=AuthServerType.OAUTH,
-            metadata=AuthorizationServerMetadata(
-                issuer="https://example.com",
-                authorization_endpoint="https://example.com/oauth/authorize",
-                token_endpoint="https://example.com/oauth/token",
-                response_types_supported=["code"],
-                grant_types_supported=["authorization_code"],
-                code_challenge_methods_supported=["S256"],
-            ),
-        )
-        config = MCPAuthConfig(server=server_config)
-        auth = MCPAuth(config)
-
-        middleware_class = auth.delegated_middleware()
-        middleware = middleware_class(app=MagicMock())
-
-        mock_request = MagicMock(spec=Request)
-        mock_request.url.path = "/some-other-path"
-
-        mock_response = Response(content="Test response")
-        mock_call_next = AsyncMock(return_value=mock_response)
-
-        # Exercise
-        response = await middleware.dispatch(mock_request, call_next=mock_call_next)
-
-        # Verify
-        assert mock_call_next.called
-        assert response == mock_response
 
 
 class TestBearerAuthMiddleware:
@@ -162,9 +120,7 @@ class TestBearerAuthMiddleware:
         auth = MCPAuth(config)
 
         # Exercise
-        with patch(
-            "mcpauth.utils.create_verify_jwt.create_verify_jwt"
-        ) as mock_create_verify_jwt:
+        with patch("mcpauth.utils.create_verify_jwt") as mock_create_verify_jwt:
             mock_create_verify_jwt.return_value = MagicMock()
             middleware_class = auth.bearer_auth_middleware(
                 "jwt", BaseBearerAuthConfig(required_scopes=["profile"])

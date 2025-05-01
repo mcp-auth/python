@@ -3,7 +3,7 @@ import time
 import jwt
 import base64
 from typing import Dict, Any
-from mcpauth.utils.create_verify_jwt import create_verify_jwt
+from mcpauth.utils import create_verify_jwt
 from mcpauth.types import AuthInfo
 
 

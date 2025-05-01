@@ -1,6 +1,6 @@
 from mcpauth.models.auth_server import AuthServerConfig, AuthServerType
 from mcpauth.models.oauth import AuthorizationServerMetadata
-from mcpauth.utils.validate_server_config import (
+from mcpauth.utils import (
     validate_server_config,
     AuthServerConfigErrorCode,
     AuthServerConfigWarningCode,

@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import Callable, Optional
 from urllib.parse import urlparse, urlunparse
-import aiohttp
+import requests
 import pydantic
 from pathlib import Path
 
@@ -46,7 +46,7 @@ def get_oidc_well_known_url(issuer: str) -> str:
     return urlunparse(parsed._replace(path=new_path))
 
 
-async def fetch_server_config_by_well_known_url(
+def fetch_server_config_by_well_known_url(
     well_known_url: str,
     type: AuthServerType,
     transpile_data: Optional[Callable[[Record], Record]] = None,
@@ -69,14 +69,13 @@ async def fetch_server_config_by_well_known_url(
     """
 
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(well_known_url) as response:
-                response.raise_for_status()
-                json = await response.json()
-                transpiled_data = transpile_data(json) if transpile_data else json
-                return AuthServerConfig(
-                    metadata=AuthorizationServerMetadata(**transpiled_data), type=type
-                )
+        response = requests.get(well_known_url, timeout=10)
+        response.raise_for_status()
+        json = response.json()
+        transpiled_data = transpile_data(json) if transpile_data else json
+        return AuthServerConfig(
+            metadata=AuthorizationServerMetadata(**transpiled_data), type=type
+        )
     except pydantic.ValidationError as e:
         raise MCPAuthAuthServerException(
             AuthServerExceptionCode.INVALID_SERVER_METADATA,
@@ -90,7 +89,7 @@ async def fetch_server_config_by_well_known_url(
         ) from e
 
 
-async def fetch_server_config(
+def fetch_server_config(
     issuer: str,
     type: AuthServerType,
     transpile_data: Optional[Callable[[Record], Record]] = None,
@@ -141,6 +140,4 @@ async def fetch_server_config(
         if type == AuthServerType.OAUTH
         else get_oidc_well_known_url(issuer)
     )
-    return await fetch_server_config_by_well_known_url(
-        well_known_url, type, transpile_data
-    )
+    return fetch_server_config_by_well_known_url(well_known_url, type, transpile_data)

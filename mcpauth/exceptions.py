@@ -36,7 +36,7 @@ class MCPAuthException(Exception):
             "error_description": self.message,
             "cause": (
                 (
-                    {k: v for k, v in self.cause.model_dump().items() if v is not None}
+                    self.cause.model_dump(exclude_none=True)
                     if isinstance(self.cause, BaseModel)
                     else str(self.cause)
                 )
