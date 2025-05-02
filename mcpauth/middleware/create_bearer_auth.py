@@ -18,9 +18,14 @@ from ..exceptions import (
 from ..types import VerifyAccessTokenFunction, Record
 
 
-class BaseBearerAuthConfig(BaseModel):
+class BearerAuthConfig(BaseModel):
     """
-    Base configuration for the Bearer auth handler.
+    Configuration for the Bearer auth handler.
+    """
+
+    issuer: str
+    """
+    The expected issuer of the access token. This should be a valid URL.
     """
 
     audience: Optional[str] = None
@@ -39,17 +44,6 @@ class BaseBearerAuthConfig(BaseModel):
     Whether to show detailed error information in the response. Defaults to False.
     If True, detailed error information will be included in the response body for debugging
     purposes.
-    """
-
-
-class BearerAuthConfig(BaseBearerAuthConfig):
-    """
-    Configuration for the Bearer auth handler.
-    """
-
-    issuer: str
-    """
-    The expected issuer of the access token. This should be a valid URL.
     """
 
 

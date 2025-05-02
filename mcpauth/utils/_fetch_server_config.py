@@ -1,4 +1,3 @@
-from enum import Enum
 from typing import Callable, Optional
 from urllib.parse import urlparse, urlunparse
 import requests
@@ -6,8 +5,12 @@ import pydantic
 from pathlib import Path
 
 from ..types import Record
-from ..models.oauth import AuthorizationServerMetadata
-from ..models.auth_server import AuthServerConfig, AuthServerType
+from ..config import (
+    AuthServerConfig,
+    AuthServerType,
+    ServerMetadataPaths,
+    AuthorizationServerMetadata,
+)
 from ..exceptions import (
     AuthServerExceptionCode,
     MCPAuthAuthServerException,
@@ -15,17 +18,7 @@ from ..exceptions import (
 )
 
 
-class ServerMetadataPaths(str, Enum):
-    """
-    Enum for server metadata paths.
-    This is used to define the standard paths for OAuth and OIDC well-known URLs.
-    """
-
-    OAUTH = "/.well-known/oauth-authorization-server"
-    OIDC = "/.well-known/openid-configuration"
-
-
-def smart_join(*args: str) -> str:
+def _smart_join(*args: str) -> str:
     """
     Joins multiple path components into a single path string, regardless of leading or trailing
     slashes.
@@ -36,13 +29,13 @@ def smart_join(*args: str) -> str:
 
 def get_oauth_well_known_url(issuer: str) -> str:
     parsed_url = urlparse(issuer)
-    new_path = smart_join(ServerMetadataPaths.OAUTH.value, parsed_url.path)
+    new_path = _smart_join(ServerMetadataPaths.OAUTH.value, parsed_url.path)
     return urlunparse(parsed_url._replace(path=new_path))
 
 
 def get_oidc_well_known_url(issuer: str) -> str:
     parsed = urlparse(issuer)
-    new_path = smart_join(parsed.path, ServerMetadataPaths.OIDC.value)
+    new_path = _smart_join(parsed.path, ServerMetadataPaths.OIDC.value)
     return urlunparse(parsed._replace(path=new_path))
 
 

@@ -1,13 +1,7 @@
 import pytest
 from unittest.mock import patch, MagicMock
 from mcpauth import MCPAuth, MCPAuthAuthServerException, AuthServerExceptionCode
-from mcpauth.config import MCPAuthConfig
-from mcpauth.models.auth_server import AuthServerConfig, AuthServerType
-from mcpauth.models.oauth import AuthorizationServerMetadata
-from mcpauth.middleware.create_bearer_auth import BaseBearerAuthConfig
-from mcpauth.middleware.create_bearer_auth import BaseBearerAuthConfig
-from mcpauth.middleware.create_bearer_auth import BaseBearerAuthConfig
-from mcpauth.middleware.create_bearer_auth import BaseBearerAuthConfig
+from mcpauth.config import AuthServerConfig, AuthServerType, AuthorizationServerMetadata
 
 
 class TestMCPAuth:
@@ -24,13 +18,12 @@ class TestMCPAuth:
                 code_challenge_methods_supported=["S256"],
             ),
         )
-        config = MCPAuthConfig(server=server_config)
 
         # Exercise
-        auth = MCPAuth(config)
+        auth = MCPAuth(server=server_config)
 
         # Verify
-        assert auth.config == config
+        assert auth.server == server_config
 
     def test_init_with_invalid_config(self):
         # Setup
@@ -43,11 +36,10 @@ class TestMCPAuth:
                 response_types_supported=["token"],  # Invalid response type
             ),
         )
-        config = MCPAuthConfig(server=server_config)
 
         # Exercise & Verify
         with pytest.raises(MCPAuthAuthServerException) as exc_info:
-            MCPAuth(config)
+            MCPAuth(server=server_config)
 
         assert exc_info.value.code == AuthServerExceptionCode.INVALID_SERVER_CONFIG
 
@@ -66,10 +58,9 @@ class TestMCPAuth:
                 # Missing registration_endpoint will cause a warning
             ),
         )
-        config = MCPAuthConfig(server=server_config)
 
         # Exercise
-        MCPAuth(config)
+        MCPAuth(server=server_config)
 
         # Verify
         assert mock_warning.called
@@ -89,8 +80,7 @@ class TestOAuthMetadataResponse:
                 code_challenge_methods_supported=["S256"],
             ),
         )
-        config = MCPAuthConfig(server=server_config)
-        auth = MCPAuth(config)
+        auth = MCPAuth(server=server_config)
 
         # Exercise
         response = auth.metadata_response()
@@ -116,20 +106,19 @@ class TestBearerAuthMiddleware:
                 code_challenge_methods_supported=["S256"],
             ),
         )
-        config = MCPAuthConfig(server=server_config)
-        auth = MCPAuth(config)
+        auth = MCPAuth(server=server_config)
 
         # Exercise
         with patch("mcpauth.utils.create_verify_jwt") as mock_create_verify_jwt:
             mock_create_verify_jwt.return_value = MagicMock()
             middleware_class = auth.bearer_auth_middleware(
-                "jwt", BaseBearerAuthConfig(required_scopes=["profile"])
+                "jwt", required_scopes=["profile"]
             )
 
         # Verify
         assert middleware_class is not None
         mock_create_verify_jwt.assert_called_once_with(
-            "https://example.com/.well-known/jwks.json", options={}
+            "https://example.com/.well-known/jwks.json", leeway=60
         )
 
     def test_bearer_auth_middleware_custom_verify(self):
@@ -145,8 +134,7 @@ class TestBearerAuthMiddleware:
                 code_challenge_methods_supported=["S256"],
             ),
         )
-        config = MCPAuthConfig(server=server_config)
-        auth = MCPAuth(config)
+        auth = MCPAuth(server=server_config)
 
         custom_verify = MagicMock()
 
@@ -155,7 +143,7 @@ class TestBearerAuthMiddleware:
             "mcpauth.middleware.create_bearer_auth.create_bearer_auth"
         ) as mock_create_bearer_auth:
             middleware_class = auth.bearer_auth_middleware(
-                custom_verify, BaseBearerAuthConfig(required_scopes=["profile"])
+                custom_verify, required_scopes=["profile"]
             )
 
         # Verify
@@ -179,14 +167,11 @@ class TestBearerAuthMiddleware:
                 code_challenge_methods_supported=["S256"],
             ),
         )
-        config = MCPAuthConfig(server=server_config)
-        auth = MCPAuth(config)
+        auth = MCPAuth(server=server_config)
 
         # Exercise & Verify
         with pytest.raises(MCPAuthAuthServerException) as exc_info:
-            auth.bearer_auth_middleware(
-                "jwt", BaseBearerAuthConfig(required_scopes=["profile"])
-            )
+            auth.bearer_auth_middleware("jwt", required_scopes=["profile"])
 
         assert exc_info.value.code == AuthServerExceptionCode.MISSING_JWKS_URI
 
@@ -203,14 +188,13 @@ class TestBearerAuthMiddleware:
                 code_challenge_methods_supported=["S256"],
             ),
         )
-        config = MCPAuthConfig(server=server_config)
-        auth = MCPAuth(config)
+        auth = MCPAuth(server=server_config)
 
         # Exercise & Verify
         with pytest.raises(ValueError) as exc_info:
             auth.bearer_auth_middleware(
                 "invalid_mode",  # type: ignore
-                BaseBearerAuthConfig(required_scopes=["profile"]),
+                required_scopes=["profile"],
             )
 
         assert "mode_or_verify must be 'jwt' or a callable function" in str(

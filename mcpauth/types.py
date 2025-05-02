@@ -86,7 +86,7 @@ class VerifyAccessTokenFunction(Protocol):
     """
     Function type for verifying an access token.
 
-    This function should throw an `MCPAuthJwtVerificationError` if the token is invalid, or return an
+    This function should throw an `MCPAuthJwtVerificationException` if the token is invalid, or return an
     `AuthInfo` instance if the token is valid.
 
     For example, if you have a JWT verification function, it should at least check the token's
