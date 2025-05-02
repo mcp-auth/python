@@ -1,11 +1,10 @@
 import pytest
 import responses
 
-from mcpauth.models.auth_server import AuthServerType
+from mcpauth.config import AuthServerType, ServerMetadataPaths
 from mcpauth.exceptions import MCPAuthAuthServerException, MCPAuthConfigException
 from mcpauth.types import Record
 from mcpauth.utils import (
-    ServerMetadataPaths,
     fetch_server_config,
     fetch_server_config_by_well_known_url,
 )
@@ -68,15 +67,12 @@ class TestFetchServerConfigByWellKnownUrl:
             "token_endpoint": "https://example.com/oauth/token",
         }
 
-        def transpile(data: Record) -> Record:
-            return {**data, "response_types_supported": ["code"]}
-
         responses.add(responses.GET, url=sample_well_known_url, json=sample_response)
 
         config = fetch_server_config_by_well_known_url(
             sample_well_known_url,
-            AuthServerType.OAUTH,
-            transpile_data=transpile,
+            type=AuthServerType.OAUTH,
+            transpile_data=lambda data: {**data, "response_types_supported": ["code"]},
         )
 
         assert config.type == AuthServerType.OAUTH
