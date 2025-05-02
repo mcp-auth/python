@@ -6,11 +6,14 @@ from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.responses import JSONResponse
 from starlette.requests import Request
+import os
+
+MCP_AUTH_ISSUER = (
+    os.getenv("MCP_AUTH_ISSUER") or "https://replace-with-your-issuer-url.com"
+)
 
 mcpAuth = MCPAuth(
-    MCPAuthConfig(
-        server=fetch_server_config("https://auth.logto.io/oidc", AuthServerType.OIDC)
-    )
+    MCPAuthConfig(server=fetch_server_config(MCP_AUTH_ISSUER, AuthServerType.OIDC))
 )
 
 protected_app = Starlette(
