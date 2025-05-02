@@ -1,17 +1,19 @@
 [project]
 name = "mcpauth"
 version = "0.0.0"
-description = "Connect your MCP server to any eligible OAuth 2 or OpenID Connect provider"
+description = "Plug-and-play auth for Python MCP servers."
 authors = [{ name = "Silverhand Inc.", email = "contact@silverhand.io" }]
 readme = "README.md"
 requires-python = ">=3.9"
-license = { text = "MIT" }
+license = "MIT"
 keywords = [
   "authentication",
   "authorization",
   "mcp",
+  "modelcontextprotocol",
   "oauth2",
   "openid-connect",
+  "oidc",
 ]
 dependencies = [
   "pydantic>=2.11.3",
@@ -38,3 +40,6 @@ dev = [
 [tool.coverage.run]
 branch = true
 source = ["mcpauth"]
+
+[tool.setuptools]
+packages = ["mcpauth"]
