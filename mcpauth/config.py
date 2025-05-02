@@ -1,7 +1,6 @@
 from enum import Enum
 from typing import List, Optional
 from pydantic import BaseModel
-from pydantic import BaseModel
 
 
 class AuthorizationServerMetadata(BaseModel):
