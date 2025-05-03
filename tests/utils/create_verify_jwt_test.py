@@ -1,3 +1,4 @@
+from unittest.mock import MagicMock
 import pytest
 import time
 import jwt
@@ -8,8 +9,8 @@ from mcpauth.types import AuthInfo
 
 
 from mcpauth.exceptions import (
-    MCPAuthJwtVerificationException,
-    MCPAuthJwtVerificationExceptionCode,
+    MCPAuthTokenVerificationException,
+    MCPAuthTokenVerificationExceptionCode,
 )
 
 _secret_key = b"super-secret-key-for-testing"
@@ -52,10 +53,12 @@ class TestCreateVerifyJwtErrorHandling:
         )
 
         # Verify that the correct exception is raised
-        with pytest.raises(MCPAuthJwtVerificationException) as exc_info:
+        with pytest.raises(MCPAuthTokenVerificationException) as exc_info:
             verify_jwt(jwt_token)
 
-        assert exc_info.value.code == MCPAuthJwtVerificationExceptionCode.INVALID_JWT
+        assert (
+            exc_info.value.code == MCPAuthTokenVerificationExceptionCode.INVALID_TOKEN
+        )
         assert isinstance(exc_info.value.cause, jwt.InvalidSignatureError)
 
     def test_should_throw_error_if_jwt_payload_missing_iss(self):
@@ -69,10 +72,11 @@ class TestCreateVerifyJwtErrorHandling:
         )
 
         for token in [jwt_missing_iss, jwt_invalid_iss_type, jwt_empty_iss]:
-            with pytest.raises(MCPAuthJwtVerificationException) as exc_info:
+            with pytest.raises(MCPAuthTokenVerificationException) as exc_info:
                 verify_jwt(token)
             assert (
-                exc_info.value.code == MCPAuthJwtVerificationExceptionCode.INVALID_JWT
+                exc_info.value.code
+                == MCPAuthTokenVerificationExceptionCode.INVALID_TOKEN
             )
 
     def test_should_throw_error_if_jwt_payload_missing_client_id(self):
@@ -92,10 +96,11 @@ class TestCreateVerifyJwtErrorHandling:
             jwt_invalid_client_id_type,
             jwt_empty_client_id,
         ]:
-            with pytest.raises(MCPAuthJwtVerificationException) as exc_info:
+            with pytest.raises(MCPAuthTokenVerificationException) as exc_info:
                 verify_jwt(token)
             assert (
-                exc_info.value.code == MCPAuthJwtVerificationExceptionCode.INVALID_JWT
+                exc_info.value.code
+                == MCPAuthTokenVerificationExceptionCode.INVALID_TOKEN
             )
 
     def test_should_throw_error_if_jwt_payload_missing_sub(self):
@@ -111,11 +116,31 @@ class TestCreateVerifyJwtErrorHandling:
         )
 
         for token in [jwt_missing_sub, jwt_invalid_sub_type, jwt_empty_sub]:
-            with pytest.raises(MCPAuthJwtVerificationException) as exc_info:
+            with pytest.raises(MCPAuthTokenVerificationException) as exc_info:
                 verify_jwt(token)
             assert (
-                exc_info.value.code == MCPAuthJwtVerificationExceptionCode.INVALID_JWT
+                exc_info.value.code
+                == MCPAuthTokenVerificationExceptionCode.INVALID_TOKEN
             )
+
+    def test_should_throw_error_if_unknown_exception_occurs(self):
+        # Mock get_signing_key_from_jwt to raise an unexpected exception
+        mock_jwk_client = MagicMock()
+        mock_jwk_client.get_signing_key_from_jwt.side_effect = Exception(
+            "Unexpected error"
+        )
+        verify_jwt = create_verify_jwt(mock_jwk_client, algorithms=[_algorithm])
+        jwt_token = create_jwt(
+            {"iss": "https://logto.io/", "client_id": "client12345", "sub": "user12345"}
+        )
+
+        # Verify that the correct exception is raised
+        with pytest.raises(MCPAuthTokenVerificationException) as exc_info:
+            verify_jwt(jwt_token)
+        assert (
+            exc_info.value.code
+            == MCPAuthTokenVerificationExceptionCode.TOKEN_VERIFICATION_FAILED
+        )
 
 
 class TestCreateVerifyJwtNormalBehavior:
@@ -143,7 +168,6 @@ class TestCreateVerifyJwtNormalBehavior:
         assert result.scopes == ["read", "write"]
         assert "exp" in result.claims
         assert "iat" in result.claims
-        assert result.expires_at is not None
 
     def test_should_return_verified_jwt_payload_with_array_scope(self):
         # Create JWT with array scope

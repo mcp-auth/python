@@ -1,7 +1,8 @@
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import AsyncMock, patch, MagicMock
 from mcpauth import MCPAuth, MCPAuthAuthServerException, AuthServerExceptionCode
 from mcpauth.config import AuthServerConfig, AuthServerType, AuthorizationServerMetadata
+from mcpauth.types import AuthInfo
 
 
 class TestMCPAuth:
@@ -66,27 +67,58 @@ class TestMCPAuth:
         assert mock_warning.called
 
 
-class TestOAuthMetadataResponse:
-    def test_metadata_response(self):
-        # Setup
-        server_config = AuthServerConfig(
-            type=AuthServerType.OAUTH,
-            metadata=AuthorizationServerMetadata(
-                issuer="https://example.com",
-                authorization_endpoint="https://example.com/oauth/authorize",
-                token_endpoint="https://example.com/oauth/token",
-                response_types_supported=["code"],
-                grant_types_supported=["authorization_code"],
-                code_challenge_methods_supported=["S256"],
-            ),
+@pytest.mark.asyncio
+class TestOAuthMetadataEndpointAndRoute:
+    server_config = AuthServerConfig(
+        type=AuthServerType.OAUTH,
+        metadata=AuthorizationServerMetadata(
+            issuer="https://example.com",
+            authorization_endpoint="https://example.com/oauth/authorize",
+            token_endpoint="https://example.com/oauth/token",
+            response_types_supported=["code"],
+            grant_types_supported=["authorization_code"],
+            code_challenge_methods_supported=["S256"],
+        ),
+    )
+
+    async def test_metadata_endpoint(self):
+        auth = MCPAuth(server=self.server_config)
+
+        options_request = MagicMock()
+        options_request.method = "OPTIONS"
+        options_response = await auth.metadata_endpoint()(options_request)
+        assert options_response.status_code == 204
+        assert options_response.headers["Access-Control-Allow-Origin"] == "*"
+        assert (
+            options_response.headers["Access-Control-Allow-Methods"] == "GET, OPTIONS"
         )
-        auth = MCPAuth(server=server_config)
 
-        # Exercise
-        response = auth.metadata_response()
+        request = MagicMock()
+        request.method = "GET"
+        response = await auth.metadata_endpoint()(request)
 
-        # Verify
         assert response.status_code == 200
+        assert response.body == self.server_config.metadata.model_dump_json(
+            exclude_none=True
+        ).encode("utf-8")
+        assert response.headers["Access-Control-Allow-Origin"] == "*"
+        assert response.headers["Access-Control-Allow-Methods"] == "GET, OPTIONS"
+
+    async def test_metadata_route(self):
+        auth = MCPAuth(server=self.server_config)
+        route = auth.metadata_route()
+
+        assert route.path == "/.well-known/oauth-authorization-server"
+        assert route.methods == {"GET", "HEAD", "OPTIONS"}
+
+        # Mock a request to the route
+        request = MagicMock()
+        request.method = "GET"
+        response = await route.endpoint(request)
+        assert response.status_code == 200
+        assert response.body == self.server_config.metadata.model_dump_json(
+            exclude_none=True
+        ).encode("utf-8")
         assert response.headers["Access-Control-Allow-Origin"] == "*"
         assert response.headers["Access-Control-Allow-Methods"] == "GET, OPTIONS"
 
@@ -121,8 +153,8 @@ class TestBearerAuthMiddleware:
             "https://example.com/.well-known/jwks.json", leeway=60
         )
 
-    def test_bearer_auth_middleware_custom_verify(self):
-        # Setup
+    @pytest.mark.asyncio
+    async def test_bearer_auth_middleware_custom_verify(self):
         server_config = AuthServerConfig(
             type=AuthServerType.OAUTH,
             metadata=AuthorizationServerMetadata(
@@ -136,22 +168,25 @@ class TestBearerAuthMiddleware:
         )
         auth = MCPAuth(server=server_config)
 
+        auth_info = AuthInfo(
+            token="valid_token",
+            issuer="https://example.com",
+            subject="1234567890",
+            scopes=["profile"],
+            claims={},
+        )
         custom_verify = MagicMock()
+        custom_verify.return_value = auth_info
 
-        # Exercise
-        with patch(
-            "mcpauth.middleware.create_bearer_auth.create_bearer_auth"
-        ) as mock_create_bearer_auth:
-            middleware_class = auth.bearer_auth_middleware(
-                custom_verify, required_scopes=["profile"]
-            )
+        middleware_class = auth.bearer_auth_middleware(
+            custom_verify, required_scopes=["profile"]
+        )
 
-        # Verify
-        assert middleware_class is not None
-        mock_create_bearer_auth.assert_called_once()
-        args, kwargs = mock_create_bearer_auth.call_args
-        assert args[0] == custom_verify
-        assert kwargs == {}
+        mock_request = MagicMock()
+        mock_request.headers = {"Authorization": "Bearer valid_token"}
+        middleware_instance = middleware_class(MagicMock())
+        await middleware_instance.dispatch(mock_request, AsyncMock())
+        assert auth.auth_info == auth_info
 
     def test_bearer_auth_middleware_jwt_without_jwks_uri(self):
         # Setup

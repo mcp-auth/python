@@ -100,6 +100,11 @@ class AuthorizationServerMetadata(BaseModel):
     code challenge methods supported by this authorization server.
     """
 
+    userinfo_endpoint: Optional[str] = None
+    """
+    URL of the authorization server's UserInfo endpoint [[OpenID Connect](https://openid.net/specs/openid-connect-core-1_0.html#UserInfo)].
+    """
+
 
 class AuthServerType(str, Enum):
     """

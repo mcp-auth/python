@@ -1,3 +1,4 @@
+from contextvars import ContextVar
 import json
 import pytest
 from unittest.mock import MagicMock, AsyncMock
@@ -5,7 +6,6 @@ from starlette.requests import Request
 from starlette.responses import Response, JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from mcpauth.types import AuthInfo, VerifyAccessTokenFunction
-from datetime import timedelta, datetime
 
 from mcpauth.middleware.create_bearer_auth import (
     create_bearer_auth,
@@ -14,42 +14,59 @@ from mcpauth.middleware.create_bearer_auth import (
 )
 from mcpauth.exceptions import (
     AuthServerExceptionCode,
-    MCPAuthJwtVerificationException,
+    MCPAuthTokenVerificationException,
     MCPAuthAuthServerException,
     MCPAuthConfigException,
-    MCPAuthJwtVerificationExceptionCode,
+    MCPAuthTokenVerificationExceptionCode,
 )
 
 
 class TestHandleBearerAuth:
-    def test_should_return_middleware_class(self):
+    @pytest.fixture
+    def auth_info(self):
+        return ContextVar("auth_info", default=None)
+
+    def test_should_return_middleware_class(
+        self, auth_info: ContextVar[AuthInfo | None]
+    ):
         middleware = create_bearer_auth(
             lambda _: None,  # type: ignore
             BearerAuthConfig(issuer="https://example.com"),
+            auth_info,
         )
         assert callable(middleware)
 
-    def test_should_throw_error_if_verify_access_token_is_not_a_function(self):
+    def test_should_throw_error_if_verify_access_token_is_not_a_function(
+        self, auth_info: ContextVar[AuthInfo | None]
+    ):
         with pytest.raises(
             TypeError, match=r"`verify_access_token` must be a function"
         ):
             create_bearer_auth(
                 "not a function",  # type: ignore
                 BearerAuthConfig(issuer="https://example.com"),
+                auth_info,
             )
 
-    def test_should_throw_error_if_issuer_is_not_a_valid_url(self):
+    def test_should_throw_error_if_issuer_is_not_a_valid_url(
+        self, auth_info: ContextVar[AuthInfo | None]
+    ):
         with pytest.raises(TypeError, match=r"`issuer` must be a valid URL."):
             create_bearer_auth(
                 lambda _: None,  # type: ignore
                 BearerAuthConfig(issuer="not a valid url"),
+                auth_info,
             )
 
 
 @pytest.mark.asyncio
 class TestHandleBearerAuthMiddleware:
     @pytest.fixture
-    def auth_config(self):
+    def auth_info(self):
+        return ContextVar("auth_info", default=None)
+
+    @pytest.fixture
+    def auth_config(self, auth_info: ContextVar[AuthInfo | None]):
         issuer = "https://example.com"
         required_scopes = ["read", "write"]
         audience = "test-audience"
@@ -62,12 +79,11 @@ class TestHandleBearerAuthMiddleware:
                     scopes=["read", "write"],
                     token=token,
                     audience=audience,
-                    expires_at=int((datetime.now() + timedelta(hours=1)).timestamp()),
                     subject="subject-id",
                     claims={"sub": "subject-id", "aud": audience, "iss": issuer},
                 )
-            raise MCPAuthJwtVerificationException(
-                MCPAuthJwtVerificationExceptionCode.INVALID_JWT
+            raise MCPAuthTokenVerificationException(
+                MCPAuthTokenVerificationExceptionCode.INVALID_TOKEN
             )
 
         return (
@@ -77,13 +93,19 @@ class TestHandleBearerAuthMiddleware:
                 required_scopes=required_scopes,
                 audience=audience,
             ),
+            auth_info,
         )
 
     @pytest.fixture
     def middleware(
-        self, auth_config: tuple[VerifyAccessTokenFunction, BearerAuthConfig]
+        self,
+        auth_config: tuple[
+            VerifyAccessTokenFunction, BearerAuthConfig, ContextVar[AuthInfo | None]
+        ],
     ):
-        MiddlewareClass = create_bearer_auth(auth_config[0], auth_config[1])
+        MiddlewareClass = create_bearer_auth(
+            auth_config[0], auth_config[1], auth_config[2]
+        )
         return MiddlewareClass(app=MagicMock())
 
     async def test_should_respond_with_error_if_request_does_not_have_bearer_token(
@@ -174,18 +196,22 @@ class TestHandleBearerAuthMiddleware:
 
     async def test_should_respond_with_error_if_bearer_token_is_not_valid(
         self,
-        auth_config: tuple[VerifyAccessTokenFunction, BearerAuthConfig],
+        auth_config: tuple[
+            VerifyAccessTokenFunction, BearerAuthConfig, ContextVar[AuthInfo | None]
+        ],
     ):
         mock_verify = MagicMock(
-            side_effect=MCPAuthJwtVerificationException(
-                MCPAuthJwtVerificationExceptionCode.INVALID_JWT
+            side_effect=MCPAuthTokenVerificationException(
+                MCPAuthTokenVerificationExceptionCode.INVALID_TOKEN
             )
         )
-        MiddlewareClass = create_bearer_auth(mock_verify, auth_config[1])
+        MiddlewareClass = create_bearer_auth(
+            mock_verify, auth_config[1], auth_config[2]
+        )
         middleware = MiddlewareClass(app=MagicMock())
 
-        mock_verify.side_effect = MCPAuthJwtVerificationException(
-            MCPAuthJwtVerificationExceptionCode.INVALID_JWT
+        mock_verify.side_effect = MCPAuthTokenVerificationException(
+            MCPAuthTokenVerificationExceptionCode.INVALID_TOKEN
         )
 
         request = Request(
@@ -203,14 +229,16 @@ class TestHandleBearerAuthMiddleware:
         assert isinstance(response, JSONResponse) and isinstance(response.body, bytes)
         response_data = json.loads(response.body.decode("utf-8"))
         assert response_data == {
-            "error": "invalid_jwt",
-            "error_description": "The provided JWT is invalid or malformed.",
+            "error": "invalid_token",
+            "error_description": "The provided token is invalid or malformed.",
         }
         mock_verify.assert_called_once_with("invalid-token")
 
     async def test_should_respond_with_error_if_issuer_does_not_match(
         self,
-        auth_config: tuple[VerifyAccessTokenFunction, BearerAuthConfig],
+        auth_config: tuple[
+            VerifyAccessTokenFunction, BearerAuthConfig, ContextVar[AuthInfo | None]
+        ],
     ):
         mock_verify = MagicMock()
         mock_verify.return_value = AuthInfo(
@@ -219,7 +247,6 @@ class TestHandleBearerAuthMiddleware:
             scopes=["read", "write"],
             token="valid-token",
             audience=auth_config[1].audience,
-            expires_at=int((datetime.now() + timedelta(hours=1)).timestamp()),
             subject="subject-id",
             claims={
                 "sub": "subject-id",
@@ -228,7 +255,9 @@ class TestHandleBearerAuthMiddleware:
             },
         )
 
-        MiddlewareClass = create_bearer_auth(mock_verify, auth_config[1])
+        MiddlewareClass = create_bearer_auth(
+            mock_verify, auth_config[1], auth_config[2]
+        )
         middleware = MiddlewareClass(app=MagicMock())
 
         request = Request(
@@ -253,7 +282,9 @@ class TestHandleBearerAuthMiddleware:
 
     async def test_should_respond_with_error_if_audience_does_not_match(
         self,
-        auth_config: tuple[VerifyAccessTokenFunction, BearerAuthConfig],
+        auth_config: tuple[
+            VerifyAccessTokenFunction, BearerAuthConfig, ContextVar[AuthInfo | None]
+        ],
     ):
         mock_verify = MagicMock()
         mock_verify.return_value = AuthInfo(
@@ -262,7 +293,6 @@ class TestHandleBearerAuthMiddleware:
             scopes=["read", "write"],
             token="valid-token",
             audience="wrong-audience",
-            expires_at=int((datetime.now() + timedelta(hours=1)).timestamp()),
             subject="subject-id",
             claims={
                 "sub": "subject-id",
@@ -271,7 +301,9 @@ class TestHandleBearerAuthMiddleware:
             },
         )
 
-        MiddlewareClass = create_bearer_auth(mock_verify, auth_config[1])
+        MiddlewareClass = create_bearer_auth(
+            mock_verify, auth_config[1], auth_config[2]
+        )
         middleware = MiddlewareClass(app=MagicMock())
 
         request = Request(
@@ -296,7 +328,9 @@ class TestHandleBearerAuthMiddleware:
 
     async def test_should_respond_with_error_if_audience_does_not_match_array_case(
         self,
-        auth_config: tuple[VerifyAccessTokenFunction, BearerAuthConfig],
+        auth_config: tuple[
+            VerifyAccessTokenFunction, BearerAuthConfig, ContextVar[AuthInfo | None]
+        ],
     ):
         mock_verify = MagicMock()
         mock_verify.return_value = AuthInfo(
@@ -305,7 +339,6 @@ class TestHandleBearerAuthMiddleware:
             scopes=["read", "write"],
             token="valid-token",
             audience=["wrong-audience"],
-            expires_at=int((datetime.now() + timedelta(hours=1)).timestamp()),
             subject="subject-id",
             claims={
                 "sub": "subject-id",
@@ -314,7 +347,9 @@ class TestHandleBearerAuthMiddleware:
             },
         )
 
-        MiddlewareClass = create_bearer_auth(mock_verify, auth_config[1])
+        MiddlewareClass = create_bearer_auth(
+            mock_verify, auth_config[1], auth_config[2]
+        )
         middleware = MiddlewareClass(app=MagicMock())
 
         request = Request(
@@ -339,7 +374,9 @@ class TestHandleBearerAuthMiddleware:
 
     async def test_should_respond_with_error_if_required_scopes_are_not_present(
         self,
-        auth_config: tuple[VerifyAccessTokenFunction, BearerAuthConfig],
+        auth_config: tuple[
+            VerifyAccessTokenFunction, BearerAuthConfig, ContextVar[AuthInfo | None]
+        ],
     ):
         mock_verify = MagicMock()
         mock_verify.return_value = AuthInfo(
@@ -348,7 +385,6 @@ class TestHandleBearerAuthMiddleware:
             scopes=["read"],  # Missing "write" scope
             token="valid-token",
             audience=auth_config[1].audience,
-            expires_at=int((datetime.now() + timedelta(hours=1)).timestamp()),
             subject="subject-id",
             claims={
                 "sub": "subject-id",
@@ -357,7 +393,9 @@ class TestHandleBearerAuthMiddleware:
             },
         )
 
-        MiddlewareClass = create_bearer_auth(mock_verify, auth_config[1])
+        MiddlewareClass = create_bearer_auth(
+            mock_verify, auth_config[1], auth_config[2]
+        )
         middleware = MiddlewareClass(app=MagicMock())
 
         request = Request(
@@ -393,8 +431,6 @@ class TestHandleBearerAuthMiddleware:
             }
         )
 
-        # Create a mock for the next_call
-        # Create a mock for the next_call with AsyncMock
         next_call = AsyncMock()
         next_call.return_value = Response(status_code=200)
 
@@ -405,7 +441,9 @@ class TestHandleBearerAuthMiddleware:
         assert response.status_code == 200
 
     async def test_should_override_existing_auth_property_on_request(
-        self, middleware: BaseHTTPMiddleware
+        self,
+        middleware: BaseHTTPMiddleware,
+        auth_info: ContextVar[AuthInfo | None],
     ):
         # Create request with existing auth attribute
         request = Request(
@@ -417,11 +455,15 @@ class TestHandleBearerAuthMiddleware:
             }
         )
 
-        # Set pre-existing auth property
-        setattr(
-            request.state,
-            "auth",
-            {"client_id": "old-client-id", "scopes": ["old-scope"]},
+        auth_info.set(
+            AuthInfo(
+                token="old-valid-token",
+                subject="old-subject-id",
+                issuer="https://old-issuer.com",
+                client_id="old-client-id",
+                scopes=["old-scope"],
+                claims={},
+            )
         )
 
         # Create mock for next_call
@@ -429,14 +471,15 @@ class TestHandleBearerAuthMiddleware:
         next_call.return_value = Response(status_code=200)
 
         response = await middleware.dispatch(request, next_call)
+        current_auth_info = auth_info.get()
 
-        # Check that auth was overridden with new values
-        assert hasattr(request.state, "auth")
-        assert request.state.auth.issuer == "https://example.com"
-        assert request.state.auth.client_id == "client-id"
-        assert request.state.auth.scopes == ["read", "write"]
-        assert request.state.auth.token == "valid-token"
-        assert request.state.auth.audience == "test-audience"
+        assert current_auth_info is not None
+        assert current_auth_info.issuer == "https://example.com"
+        assert current_auth_info.client_id == "client-id"
+        assert current_auth_info.scopes == ["read", "write"]
+        assert current_auth_info.token == "valid-token"
+        assert current_auth_info.audience == "test-audience"
+        assert current_auth_info.subject == "subject-id"
 
         next_call.assert_called_once()
         assert response.status_code == 200
@@ -456,7 +499,9 @@ class TestHandleBearerAuthMiddleware:
             show_error_details=True,
         )
 
-        MiddlewareClass = create_bearer_auth(mock_verify, config)
+        MiddlewareClass = create_bearer_auth(
+            mock_verify, config, ContextVar("auth_info", default=None)
+        )
         middleware = MiddlewareClass(app=MagicMock())
 
         request = Request(
@@ -493,6 +538,7 @@ class TestHandleBearerAuthMiddleware:
             BearerAuthConfig(
                 issuer="https://example.com", required_scopes=[], audience=None
             ),
+            ContextVar("auth_info", default=None),
         )
         config_error_middleware = config_error_middleware_class(app=MagicMock())
 
@@ -530,6 +576,7 @@ class TestHandleBearerAuthMiddleware:
             BearerAuthConfig(
                 issuer="https://example.com", required_scopes=[], audience=None
             ),
+            ContextVar("auth_info", default=None),
         )
         middleware = middleware_class(app=MagicMock())
 
@@ -557,7 +604,6 @@ class TestHandleBearerAuthMiddleware:
             scopes=required_scopes,
             token="valid-token",
             audience=audience,
-            expires_at=int((datetime.now() + timedelta(hours=1)).timestamp()),
             subject="subject-id",
             claims={"sub": "subject-id", "aud": audience, "iss": issuer + "1"},
         )
@@ -570,6 +616,7 @@ class TestHandleBearerAuthMiddleware:
                 audience=audience,
                 show_error_details=True,
             ),
+            ContextVar("auth_info", default=None),
         )
         middleware = middleware_class(app=MagicMock())
 

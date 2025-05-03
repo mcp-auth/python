@@ -1,13 +1,18 @@
+from contextvars import ContextVar
 import logging
-from typing import List, Literal, Optional, Union
+from typing import Any, Callable, List, Literal, Optional, Union
 
 from .middleware.create_bearer_auth import BearerAuthConfig
-from .types import VerifyAccessTokenFunction
-from .config import AuthServerConfig
+from .types import AuthInfo, VerifyAccessTokenFunction
+from .config import AuthServerConfig, ServerMetadataPaths
 from .exceptions import MCPAuthAuthServerException, AuthServerExceptionCode
 from .utils import validate_server_config
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import JSONResponse
+from starlette.responses import Response, JSONResponse
+from starlette.requests import Request
+from starlette.routing import Route
+
+_context_var_name = "mcp_auth_context"
 
 
 class MCPAuth:
@@ -18,9 +23,22 @@ class MCPAuth:
     See Also: https://mcp-auth.dev for more information about the library and its usage.
     """
 
-    def __init__(self, server: AuthServerConfig):
+    server: AuthServerConfig
+    """
+    The configuration for the remote authorization server.
+    """
+
+    def __init__(
+        self,
+        server: AuthServerConfig,
+        context_var: ContextVar[Optional[AuthInfo]] = ContextVar(
+            _context_var_name, default=None
+        ),
+    ):
         """
         :param server: Configuration for the remote authorization server.
+        :param context_var: Context variable to store the `AuthInfo` object for the current request.
+        By default, it will be created with the name "mcp_auth_context".
         """
 
         result = validate_server_config(server)
@@ -40,20 +58,78 @@ class MCPAuth:
                 logging.warning(f"- {warning}")
 
         self.server = server
+        self._context_var = context_var
 
-    def metadata_response(self) -> JSONResponse:
+    @property
+    def auth_info(self) -> Optional[AuthInfo]:
         """
-        Returns a response containing the server metadata in JSON format with CORS support.
-        """
-        server_config = self.server
+        The current `AuthInfo` object from the context variable.
 
-        response = JSONResponse(
-            server_config.metadata.model_dump(exclude_none=True),
-            status_code=200,
+        This is useful for accessing the authenticated user's information in later middleware or
+        route handlers.
+        :return: The current `AuthInfo` object, or `None` if not set.
+        """
+
+        return self._context_var.get()
+
+    def metadata_endpoint(self) -> Callable[[Request], Any]:
+        """
+        Returns a Starlette endpoint function that handles the OAuth 2.0 Authorization Metadata
+        endpoint (`/.well-known/oauth-authorization-server`) with CORS support.
+
+        Example:
+        ```python
+        from starlette.applications import Starlette
+        from mcpauth import MCPAuth
+        from mcpauth.config import ServerMetadataPaths
+
+        mcp_auth = MCPAuth(server=your_server_config)
+        app = Starlette(routes=[
+            Route(
+                ServerMetadataPaths.OAUTH.value,
+                mcp_auth.metadata_endpoint(),
+                methods=["GET", "OPTIONS"] # Ensure to handle both GET and OPTIONS methods
+            )
+        ])
+        ```
+        """
+
+        async def endpoint(request: Request) -> Response:
+            if request.method == "OPTIONS":
+                response = Response(status_code=204)
+            else:
+                server_config = self.server
+                response = JSONResponse(
+                    server_config.metadata.model_dump(exclude_none=True),
+                    status_code=200,
+                )
+            response.headers["Access-Control-Allow-Origin"] = "*"
+            response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+            response.headers["Access-Control-Allow-Headers"] = "*"
+            return response
+
+        return endpoint
+
+    def metadata_route(self) -> Route:
+        """
+        Returns a Starlette route that handles the OAuth 2.0 Authorization Metadata endpoint
+        (`/.well-known/oauth-authorization-server`) with CORS support.
+
+        Example:
+        ```python
+        from starlette.applications import Starlette
+        from mcpauth import MCPAuth
+
+        mcp_auth = MCPAuth(server=your_server_config)
+        app = Starlette(routes=[mcp_auth.metadata_route()])
+        ```
+        """
+
+        return Route(
+            ServerMetadataPaths.OAUTH.value,
+            self.metadata_endpoint(),
+            methods=["GET", "OPTIONS"],
         )
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-        return response
 
     def bearer_auth_middleware(
         self,
@@ -101,10 +177,11 @@ class MCPAuth:
 
         return create_bearer_auth(
             verify,
-            BearerAuthConfig(
+            config=BearerAuthConfig(
                 issuer=metadata.issuer,
                 audience=audience,
                 required_scopes=required_scopes,
                 show_error_details=show_error_details,
             ),
+            context_var=self._context_var,
         )

@@ -6,8 +6,8 @@ from mcpauth.exceptions import (
     MCPAuthBearerAuthException,
     MCPAuthBearerAuthExceptionDetails,
     MCPAuthException,
-    MCPAuthJwtVerificationException,
-    MCPAuthJwtVerificationExceptionCode,
+    MCPAuthTokenVerificationException,
+    MCPAuthTokenVerificationExceptionCode,
 )
 
 
@@ -94,21 +94,23 @@ class TestMCPAuthBearerAuthException:
         assert result["missing_scopes"] == ["scope1", "scope2"]
 
 
-class TestMCPAuthJwtVerificationException:
+class TestMCPAuthTokenVerificationException:
     def test_message_based_on_code(self):
-        mcp_exception = MCPAuthJwtVerificationException(
-            MCPAuthJwtVerificationExceptionCode.INVALID_JWT
+        mcp_exception = MCPAuthTokenVerificationException(
+            MCPAuthTokenVerificationExceptionCode.INVALID_TOKEN
         )
-        assert mcp_exception.message == "The provided JWT is invalid or malformed."
+        assert mcp_exception.message == "The provided token is invalid or malformed."
         assert mcp_exception.to_json() == {
-            "error": "invalid_jwt",
-            "error_description": "The provided JWT is invalid or malformed.",
+            "error": "invalid_token",
+            "error_description": "The provided token is invalid or malformed.",
         }
 
     def test_default_message_for_unknown_code(self):
-        mcp_exception = MCPAuthJwtVerificationException(WrongExceptionCode.unknown)  # type: ignore
-        assert mcp_exception.message == "An exception occurred while verifying the JWT."
+        mcp_exception = MCPAuthTokenVerificationException(WrongExceptionCode.unknown)  # type: ignore
+        assert (
+            mcp_exception.message == "An exception occurred while verifying the token."
+        )
         assert mcp_exception.to_json() == {
             "error": "unknown_code",
-            "error_description": "An exception occurred while verifying the JWT.",
+            "error_description": "An exception occurred while verifying the token.",
         }
