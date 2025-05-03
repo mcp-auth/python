@@ -1,6 +1,6 @@
 from enum import Enum
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 from ..config import AuthServerConfig
 
 
@@ -99,21 +99,7 @@ def validate_server_config(
 
     errors: List[AuthServerConfigError] = []
     warnings: List[AuthServerConfigWarning] = []
-
     metadata = config.metadata
-
-    # Validate metadata
-    try:
-        # Validation is already done by Pydantic when the object is created
-        # But we can add additional validation if needed
-        pass
-    except ValidationError as e:
-        errors.append(
-            _create_error(AuthServerConfigErrorCode.INVALID_SERVER_METADATA, e)
-        )
-        return AuthServerConfigValidationResult(
-            is_valid=False, errors=errors, warnings=warnings
-        )
 
     # Check if 'code' is included in any of the supported response types
     has_code_response_type = any(

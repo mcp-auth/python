@@ -22,41 +22,51 @@ from mcpauth.exceptions import (
 
 
 class TestHandleBearerAuth:
-    def test_should_return_middleware_class(self):
+    @pytest.fixture
+    def auth_info(self):
+        return ContextVar("auth_info", default=None)
+
+    def test_should_return_middleware_class(
+        self, auth_info: ContextVar[AuthInfo | None]
+    ):
         middleware = create_bearer_auth(
             lambda _: None,  # type: ignore
             BearerAuthConfig(issuer="https://example.com"),
-            ContextVar("auth_info", default=None),
+            auth_info,
         )
         assert callable(middleware)
 
-    def test_should_throw_error_if_verify_access_token_is_not_a_function(self):
+    def test_should_throw_error_if_verify_access_token_is_not_a_function(
+        self, auth_info: ContextVar[AuthInfo | None]
+    ):
         with pytest.raises(
             TypeError, match=r"`verify_access_token` must be a function"
         ):
             create_bearer_auth(
                 "not a function",  # type: ignore
                 BearerAuthConfig(issuer="https://example.com"),
-                ContextVar("auth_info", default=None),
+                auth_info,
             )
 
-    def test_should_throw_error_if_issuer_is_not_a_valid_url(self):
+    def test_should_throw_error_if_issuer_is_not_a_valid_url(
+        self, auth_info: ContextVar[AuthInfo | None]
+    ):
         with pytest.raises(TypeError, match=r"`issuer` must be a valid URL."):
             create_bearer_auth(
                 lambda _: None,  # type: ignore
                 BearerAuthConfig(issuer="not a valid url"),
-                ContextVar("auth_info", default=None),
+                auth_info,
             )
 
 
 @pytest.mark.asyncio
 class TestHandleBearerAuthMiddleware:
     @pytest.fixture
-    def auth_info_context(self):
+    def auth_info(self):
         return ContextVar("auth_info", default=None)
 
     @pytest.fixture
-    def auth_config(self, auth_info_context: ContextVar[AuthInfo | None]):
+    def auth_config(self, auth_info: ContextVar[AuthInfo | None]):
         issuer = "https://example.com"
         required_scopes = ["read", "write"]
         audience = "test-audience"
@@ -83,7 +93,7 @@ class TestHandleBearerAuthMiddleware:
                 required_scopes=required_scopes,
                 audience=audience,
             ),
-            auth_info_context,
+            auth_info,
         )
 
     @pytest.fixture
@@ -433,7 +443,7 @@ class TestHandleBearerAuthMiddleware:
     async def test_should_override_existing_auth_property_on_request(
         self,
         middleware: BaseHTTPMiddleware,
-        auth_info_context: ContextVar[AuthInfo | None],
+        auth_info: ContextVar[AuthInfo | None],
     ):
         # Create request with existing auth attribute
         request = Request(
@@ -445,7 +455,7 @@ class TestHandleBearerAuthMiddleware:
             }
         )
 
-        auth_info_context.set(
+        auth_info.set(
             AuthInfo(
                 token="old-valid-token",
                 subject="old-subject-id",
@@ -461,7 +471,7 @@ class TestHandleBearerAuthMiddleware:
         next_call.return_value = Response(status_code=200)
 
         response = await middleware.dispatch(request, next_call)
-        current_auth_info = auth_info_context.get()
+        current_auth_info = auth_info.get()
 
         assert current_auth_info is not None
         assert current_auth_info.issuer == "https://example.com"

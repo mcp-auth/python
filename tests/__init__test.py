@@ -1,9 +1,8 @@
-from contextvars import ContextVar
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import AsyncMock, patch, MagicMock
 from mcpauth import MCPAuth, MCPAuthAuthServerException, AuthServerExceptionCode
 from mcpauth.config import AuthServerConfig, AuthServerType, AuthorizationServerMetadata
-from mcpauth.middleware.create_bearer_auth import BearerAuthConfig
+from mcpauth.types import AuthInfo
 
 
 class TestMCPAuth:
@@ -154,8 +153,8 @@ class TestBearerAuthMiddleware:
             "https://example.com/.well-known/jwks.json", leeway=60
         )
 
-    def test_bearer_auth_middleware_custom_verify(self):
-        # Setup
+    @pytest.mark.asyncio
+    async def test_bearer_auth_middleware_custom_verify(self):
         server_config = AuthServerConfig(
             type=AuthServerType.OAUTH,
             metadata=AuthorizationServerMetadata(
@@ -169,24 +168,25 @@ class TestBearerAuthMiddleware:
         )
         auth = MCPAuth(server=server_config)
 
+        auth_info = AuthInfo(
+            token="valid_token",
+            issuer="https://example.com",
+            subject="1234567890",
+            scopes=["profile"],
+            claims={},
+        )
         custom_verify = MagicMock()
+        custom_verify.return_value = auth_info
 
-        # Exercise
-        with patch(
-            "mcpauth.middleware.create_bearer_auth.create_bearer_auth"
-        ) as mock_create_bearer_auth:
-            middleware_class = auth.bearer_auth_middleware(
-                custom_verify, required_scopes=["profile"]
-            )
+        middleware_class = auth.bearer_auth_middleware(
+            custom_verify, required_scopes=["profile"]
+        )
 
-        # Verify
-        assert middleware_class is not None
-        mock_create_bearer_auth.assert_called_once()
-        args, kwargs = mock_create_bearer_auth.call_args
-        assert args[0] == custom_verify
-        assert isinstance(kwargs, dict)
-        assert isinstance(kwargs.get("config"), BearerAuthConfig)  # type: ignore
-        assert isinstance(kwargs.get("context_var"), ContextVar)  # type: ignore
+        mock_request = MagicMock()
+        mock_request.headers = {"Authorization": "Bearer valid_token"}
+        middleware_instance = middleware_class(MagicMock())
+        await middleware_instance.dispatch(mock_request, AsyncMock())
+        assert auth.auth_info == auth_info
 
     def test_bearer_auth_middleware_jwt_without_jwks_uri(self):
         # Setup

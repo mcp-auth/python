@@ -1,3 +1,4 @@
+from unittest.mock import MagicMock
 import pytest
 import time
 import jwt
@@ -121,6 +122,25 @@ class TestCreateVerifyJwtErrorHandling:
                 exc_info.value.code
                 == MCPAuthTokenVerificationExceptionCode.INVALID_TOKEN
             )
+
+    def test_should_throw_error_if_unknown_exception_occurs(self):
+        # Mock get_signing_key_from_jwt to raise an unexpected exception
+        mock_jwk_client = MagicMock()
+        mock_jwk_client.get_signing_key_from_jwt.side_effect = Exception(
+            "Unexpected error"
+        )
+        verify_jwt = create_verify_jwt(mock_jwk_client, algorithms=[_algorithm])
+        jwt_token = create_jwt(
+            {"iss": "https://logto.io/", "client_id": "client12345", "sub": "user12345"}
+        )
+
+        # Verify that the correct exception is raised
+        with pytest.raises(MCPAuthTokenVerificationException) as exc_info:
+            verify_jwt(jwt_token)
+        assert (
+            exc_info.value.code
+            == MCPAuthTokenVerificationExceptionCode.TOKEN_VERIFICATION_FAILED
+        )
 
 
 class TestCreateVerifyJwtNormalBehavior:
