@@ -1,3 +1,4 @@
+from contextvars import ContextVar
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 import logging
@@ -9,13 +10,13 @@ from starlette.datastructures import Headers
 
 from ..exceptions import (
     MCPAuthBearerAuthException,
-    MCPAuthJwtVerificationException,
+    MCPAuthTokenVerificationException,
     MCPAuthAuthServerException,
     MCPAuthConfigException,
     BearerAuthExceptionCode,
     MCPAuthBearerAuthExceptionDetails,
 )
-from ..types import VerifyAccessTokenFunction, Record
+from ..types import AuthInfo, VerifyAccessTokenFunction, Record
 
 
 class BearerAuthConfig(BaseModel):
@@ -92,7 +93,7 @@ def _handle_error(
     Returns:
       A tuple of (status_code, response_body).
     """
-    if isinstance(error, MCPAuthJwtVerificationException):
+    if isinstance(error, MCPAuthTokenVerificationException):
         return 401, error.to_json(show_error_details)
 
     if isinstance(error, MCPAuthBearerAuthException):
@@ -114,7 +115,9 @@ def _handle_error(
 
 
 def create_bearer_auth(
-    verify_access_token: VerifyAccessTokenFunction, config: BearerAuthConfig
+    verify_access_token: VerifyAccessTokenFunction,
+    config: BearerAuthConfig,
+    context_var: ContextVar[Optional[AuthInfo]],
 ) -> type[BaseHTTPMiddleware]:
     """
     Creates a middleware function for handling Bearer auth.
@@ -122,12 +125,12 @@ def create_bearer_auth(
     This middleware extracts the Bearer token from the `Authorization` header, verifies it using the
     provided `verify_access_token` function, and checks the issuer, audience, and required scopes.
 
-    Args:
-      verify_access_token: A function that takes a Bearer token and returns an `AuthInfo` object.
-      config: Configuration for the Bearer auth handler.
+    :param verify_access_token: A function that takes a Bearer token and returns an `AuthInfo` object.
+    :param config: Configuration for the Bearer auth handler.
+    :param context_var: Context variable to store the `AuthInfo` object for the current request.
+    This allows access to the authenticated user's information in later middleware or route handlers.
 
-    Returns:
-      A middleware class that handles Bearer auth.
+    :return: A middleware class that handles Bearer auth.
     """
 
     if not callable(verify_access_token):
@@ -206,8 +209,12 @@ def create_bearer_auth(
                             cause=details,
                         )
 
-                # Attach auth info to the request
-                request.state.auth = auth_info
+                if context_var.get() is not None:
+                    logging.warning(
+                        "Overwriting existing auth info in context variable."
+                    )
+
+                context_var.set(auth_info)
 
                 # Call the next middleware or route handler
                 response = await call_next(request)

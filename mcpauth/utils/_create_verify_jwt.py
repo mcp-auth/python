@@ -1,23 +1,11 @@
-from typing import Annotated, List, Optional, Union
+from typing import List, Union
 from jwt import PyJWK, PyJWKClient, PyJWTError, decode
-from pydantic import BaseModel, StringConstraints, ValidationError
-from ..types import AuthInfo, VerifyAccessTokenFunction
+from pydantic import ValidationError
+from ..types import AuthInfo, JwtPayload, VerifyAccessTokenFunction
 from ..exceptions import (
-    MCPAuthJwtVerificationException,
-    MCPAuthJwtVerificationExceptionCode,
+    MCPAuthTokenVerificationException,
+    MCPAuthTokenVerificationExceptionCode,
 )
-
-NonEmptyString = Annotated[str, StringConstraints(min_length=1)]
-
-
-class JwtBaseModel(BaseModel):
-    aud: Optional[Union[NonEmptyString, List[NonEmptyString]]] = None
-    iss: NonEmptyString
-    client_id: NonEmptyString
-    sub: NonEmptyString
-    scope: Optional[Union[str, List[str]]] = None
-    scopes: Optional[Union[str, List[str]]] = None
-    exp: Optional[int] = None
 
 
 def create_verify_jwt(
@@ -35,6 +23,7 @@ def create_verify_jwt(
     :param algorithms: A list of acceptable algorithms for verifying the JWT signature.
     :param leeway: The amount of leeway (in seconds) to allow when checking the expiration time of the JWT.
     :return: A function that can be used to verify JWTs.
+    :raises MCPAuthTokenVerificationException: If the JWT verification fails.
     """
 
     jwks = (
@@ -66,7 +55,7 @@ def create_verify_jwt(
                     "verify_iss": False,
                 },
             )
-            base_model = JwtBaseModel(**decoded)
+            base_model = JwtPayload(**decoded)
             scopes = base_model.scope or base_model.scopes
             return AuthInfo(
                 token=token,
@@ -75,17 +64,16 @@ def create_verify_jwt(
                 subject=base_model.sub,
                 audience=base_model.aud,
                 scopes=(scopes.split(" ") if isinstance(scopes, str) else scopes) or [],
-                expires_at=base_model.exp,
                 claims=decoded,
             )
         except (PyJWTError, ValidationError) as e:
-            raise MCPAuthJwtVerificationException(
-                MCPAuthJwtVerificationExceptionCode.INVALID_JWT,
+            raise MCPAuthTokenVerificationException(
+                MCPAuthTokenVerificationExceptionCode.INVALID_TOKEN,
                 cause=e,
             )
         except Exception as e:
-            raise MCPAuthJwtVerificationException(
-                MCPAuthJwtVerificationExceptionCode.JWT_VERIFICATION_FAILED,
+            raise MCPAuthTokenVerificationException(
+                MCPAuthTokenVerificationExceptionCode.TOKEN_VERIFICATION_FAILED,
                 cause=e,
             )
 

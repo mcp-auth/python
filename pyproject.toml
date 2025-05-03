@@ -4,7 +4,7 @@ version = "0.0.0"
 description = "Plug-and-play auth for Python MCP servers."
 authors = [{ name = "Silverhand Inc.", email = "contact@silverhand.io" }]
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = "MIT"
 keywords = [
   "authentication",
@@ -30,6 +30,7 @@ documentation = "https://mcp-auth.dev/docs"
 [dependency-groups]
 dev = [
   "black>=24.8.0",
+  "mcp[cli]>=1.7.1",
   "pytest>=8.3.5",
   "pytest-asyncio>=0.26.0",
   "pytest-cov>=6.1.1",

@@ -143,31 +143,31 @@ class MCPAuthBearerAuthException(MCPAuthException):
         return {k: v for k, v in data.items() if v is not None}
 
 
-class MCPAuthJwtVerificationExceptionCode(str, Enum):
-    INVALID_JWT = "invalid_jwt"
-    JWT_VERIFICATION_FAILED = "jwt_verification_failed"
+class MCPAuthTokenVerificationExceptionCode(str, Enum):
+    INVALID_TOKEN = "invalid_token"
+    TOKEN_VERIFICATION_FAILED = "token_verification_failed"
 
 
-jwt_verification_exception_description: Dict[
-    MCPAuthJwtVerificationExceptionCode, str
+token_verification_exception_description: Dict[
+    MCPAuthTokenVerificationExceptionCode, str
 ] = {
-    MCPAuthJwtVerificationExceptionCode.INVALID_JWT: "The provided JWT is invalid or malformed.",
-    MCPAuthJwtVerificationExceptionCode.JWT_VERIFICATION_FAILED: "JWT verification failed. The token could not be verified.",
+    MCPAuthTokenVerificationExceptionCode.INVALID_TOKEN: "The provided token is invalid or malformed.",
+    MCPAuthTokenVerificationExceptionCode.TOKEN_VERIFICATION_FAILED: "The token verification failed due to an error in the verification process.",
 }
 
 
-class MCPAuthJwtVerificationException(MCPAuthException):
+class MCPAuthTokenVerificationException(MCPAuthException):
     """
-    Exception thrown when there is an issue when verifying JWT tokens.
+    Exception thrown when there is an issue when verifying access tokens.
     """
 
     def __init__(
-        self, code: MCPAuthJwtVerificationExceptionCode, cause: ExceptionCause = None
+        self, code: MCPAuthTokenVerificationExceptionCode, cause: ExceptionCause = None
     ):
         super().__init__(
             code.value,
-            jwt_verification_exception_description.get(
-                code, "An exception occurred while verifying the JWT."
+            token_verification_exception_description.get(
+                code, "An exception occurred while verifying the token."
             ),
         )
         self.code = code
