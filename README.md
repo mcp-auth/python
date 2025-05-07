@@ -10,7 +10,7 @@
 [PyPI]: https://pypi.org/project/mcpauth/
 [PyPI Releases]: https://pypi.org/project/mcpauth/#history
 
-The MCP specification [requires OAuth 2.1 and other RFCs](https://modelcontextprotocol.io/specification/2025-03-26/basic/authorization) to be implemented for authorization. MCP Auth aims to connect your MCP server to **any** compatible OAuth 2 or OpenID Connect provider, without spending hours on lengthy implementations.
+The MCP spec [requires OAuth 2.1 and other RFCs](https://modelcontextprotocol.io/specification/2025-03-26/basic/authorization) for auth. Instead of spending weeks on them, use MCP Auth to connect to an trusted provider with a few lines of code.
 
 ## Get started
 
