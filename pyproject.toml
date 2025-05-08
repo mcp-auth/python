@@ -42,5 +42,6 @@ dev = [
 branch = true
 source = ["mcpauth"]
 
-[tool.setuptools]
-packages = ["mcpauth"]
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["mcpauth*"]
