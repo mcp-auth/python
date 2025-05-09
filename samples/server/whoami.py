@@ -54,6 +54,7 @@ def verify_access_token(token: str) -> AuthInfo:
     If the token is valid, it returns an `AuthInfo` object containing the user's information.
     """
 
+    issuer = auth_server_config.metadata.issuer
     endpoint = auth_server_config.metadata.userinfo_endpoint
     if not endpoint:
         raise ValueError(
@@ -74,7 +75,7 @@ def verify_access_token(token: str) -> AuthInfo:
             subject=json.get(
                 "sub"
             ),  # 'sub' is a standard claim for the subject (user's ID)
-            issuer=auth_issuer,  # Use the configured issuer
+            issuer=issuer,  # Use the issuer from the metadata
             claims=json,  # Include all claims (JSON fields) returned by the userinfo endpoint
         )
     # `AuthInfo` is a Pydantic model, so validation errors usually mean the response didn't match
