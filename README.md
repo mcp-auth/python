@@ -26,7 +26,7 @@ pip install mcpauth
 
 Or use your package manager of choice, such as `poetry` or `uv`.
 
-See [the documentation](https://mcp-auth.dev/docs/get-started) for the full guide.
+See [the documentation](https://mcp-auth.dev/docs) for the full guide.
 
 ## Join the discussion
 
