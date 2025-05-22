@@ -117,6 +117,11 @@ class AuthServerType(str, Enum):
     OIDC = "oidc"
 
 
+class AuthorizationServerMetadataDefaults(Enum):
+    grant_types_supported = ["authorization_code", "implicit"]
+    response_modes_supported = ["query", "fragment"]
+
+
 class AuthServerConfig(BaseModel):
     """
     Configuration for the remote authorization server integrated with the MCP server.
