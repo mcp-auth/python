@@ -122,7 +122,7 @@ class TestValidateServerConfig:
                 authorization_endpoint="https://example.com/oauth/authorize",
                 token_endpoint="https://example.com/oauth/token",
                 response_types_supported=["code"],
-                grant_types_supported=["implicit"],  # Invalid grant type
+                grant_types_supported=[],  # Use empty list on purpose to ensure it should be treated correctly
                 code_challenge_methods_supported=["S256"],
             ),
         )

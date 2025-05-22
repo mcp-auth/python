@@ -114,7 +114,9 @@ def validate_server_config(
 
     # Check if 'authorization_code' grant type is supported
     if "authorization_code" not in (
-        metadata.grant_types_supported or MetadataDefaults.grant_types_supported.value
+        metadata.grant_types_supported
+        if metadata.grant_types_supported is not None
+        else MetadataDefaults.grant_types_supported.value
     ):
         errors.append(
             _create_error(
