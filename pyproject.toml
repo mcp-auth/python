@@ -1,6 +1,6 @@
 [project]
 name = "mcpauth"
-version = "0.1.0"
+version = "0.1.1"
 description = "Plug-and-play auth for Python MCP servers."
 authors = [{ name = "Silverhand Inc.", email = "contact@silverhand.io" }]
 readme = "README.md"
