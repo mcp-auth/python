@@ -239,7 +239,7 @@ class TestCreateVerifyJwtNormalBehavior:
         jwt_token = create_jwt(claims)
         result = verify_jwt(jwt_token)
         assert result.issuer == claims["iss"]
-        assert result.client_id is ""
+        assert result.client_id == ""
         assert result.subject == claims["sub"]
         assert result.audience == claims["aud"]
         assert result.scopes == []
