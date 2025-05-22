@@ -79,29 +79,16 @@ class TestCreateVerifyJwtErrorHandling:
                 == MCPAuthTokenVerificationExceptionCode.INVALID_TOKEN
             )
 
-    def test_should_throw_error_if_jwt_payload_missing_client_id(self):
-        # Test different invalid JWT payloads
-        jwt_missing_client_id = create_jwt(
-            {"iss": "https://logto.io/", "sub": "user12345"}
-        )
-        jwt_invalid_client_id_type = create_jwt(
+    def test_should_throw_error_if_client_id_is_not_string(self):
+        token = create_jwt(
             {"iss": "https://logto.io/", "client_id": 12345, "sub": "user12345"}
         )
-        jwt_empty_client_id = create_jwt(
-            {"iss": "https://logto.io/", "client_id": "", "sub": "user12345"}
-        )
 
-        for token in [
-            jwt_missing_client_id,
-            jwt_invalid_client_id_type,
-            jwt_empty_client_id,
-        ]:
-            with pytest.raises(MCPAuthTokenVerificationException) as exc_info:
-                verify_jwt(token)
-            assert (
-                exc_info.value.code
-                == MCPAuthTokenVerificationExceptionCode.INVALID_TOKEN
-            )
+        with pytest.raises(MCPAuthTokenVerificationException) as exc_info:
+            verify_jwt(token)
+        assert (
+            exc_info.value.code == MCPAuthTokenVerificationExceptionCode.INVALID_TOKEN
+        )
 
     def test_should_throw_error_if_jwt_payload_missing_sub(self):
         # Test different invalid JWT payloads
@@ -223,6 +210,56 @@ class TestCreateVerifyJwtNormalBehavior:
         # Assertions
         assert result.issuer == claims["iss"]
         assert result.client_id == claims["client_id"]
+        assert result.subject == claims["sub"]
+        assert result.audience == claims["aud"]
+        assert result.scopes == []
+
+    def test_should_return_verified_jwt_payload_without_client_id(self):
+        # Create JWT without client_id
+        claims = {
+            "iss": "https://logto.io/",
+            "sub": "user12345",
+            "aud": "audience12345",
+        }
+        jwt_token = create_jwt(claims)
+
+        # Verify
+        result = verify_jwt(jwt_token)
+
+        # Assertions
+        assert result.issuer == claims["iss"]
+        assert result.client_id is None
+        assert result.subject == claims["sub"]
+        assert result.audience == claims["aud"]
+        assert result.scopes == []
+
+        # Empty client_id should not raise an error
+        claims["client_id"] = ""
+        claims["azp"] = "client12345"  # Should be ignored if client_id is a string
+        jwt_token = create_jwt(claims)
+        result = verify_jwt(jwt_token)
+        assert result.issuer == claims["iss"]
+        assert result.client_id is ""
+        assert result.subject == claims["sub"]
+        assert result.audience == claims["aud"]
+        assert result.scopes == []
+
+    def test_should_fall_back_to_azp_if_client_id_is_missing(self):
+        # Create JWT with azp instead of client_id
+        claims = {
+            "iss": "https://logto.io/",
+            "azp": "client12345",
+            "sub": "user12345",
+            "aud": "audience12345",
+        }
+        jwt_token = create_jwt(claims)
+
+        # Verify
+        result = verify_jwt(jwt_token)
+
+        # Assertions
+        assert result.issuer == claims["iss"]
+        assert result.client_id == claims["azp"]
         assert result.subject == claims["sub"]
         assert result.audience == claims["aud"]
         assert result.scopes == []
