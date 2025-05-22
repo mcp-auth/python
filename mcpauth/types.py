@@ -35,6 +35,14 @@ class AuthInfo(BaseModel):
     registered with the OAuth / OIDC provider.
 
     Some providers may use 'application ID' or similar terms instead of 'client ID'.
+
+    Note:
+    This value accept either `client_id` (RFC 9068) or `azp` claim for better compatibility.
+    While `client_id` is required by RFC 9068 for JWT access tokens, many providers (Auth0,
+    Microsoft, Google) may use or support `azp` claim.
+    
+    See Also:
+    https://github.com/mcp-auth/js/issues/28 for detailed discussion
     """
 
     scopes: List[str] = []
@@ -139,12 +147,19 @@ class JwtPayload(BaseModel):
     - https://openid.net/specs/openid-connect-core-1_0.html#IssuerIdentifier
     """
 
-    client_id: NonEmptyString
+    client_id: Optional[str] = None
     """
     The client ID of the OAuth client that the token was issued to. This is typically the client ID
     registered with the OAuth / OIDC provider.
 
     Some providers may use 'application ID' or similar terms instead of 'client ID'.
+    """
+
+    azp: Optional[str] = None
+    """
+    The `azp` (authorized party) claim of the token, which indicates the client ID of the party
+    that authorized the request. Many providers use this claim to indicate the client ID of the
+    application instead of `client_id`.
     """
 
     sub: NonEmptyString

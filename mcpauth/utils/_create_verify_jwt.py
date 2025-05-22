@@ -60,7 +60,11 @@ def create_verify_jwt(
             return AuthInfo(
                 token=token,
                 issuer=base_model.iss,
-                client_id=base_model.client_id,
+                client_id=(
+                    base_model.client_id
+                    if base_model.client_id is not None
+                    else base_model.azp
+                ),
                 subject=base_model.sub,
                 audience=base_model.aud,
                 scopes=(scopes.split(" ") if isinstance(scopes, str) else scopes) or [],
