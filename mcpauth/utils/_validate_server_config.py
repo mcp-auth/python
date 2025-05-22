@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel
-from ..config import AuthServerConfig
+from ..config import AuthServerConfig, AuthorizationServerMetadataDefaults
 
 
 class AuthServerConfigErrorCode(str, Enum):
@@ -97,6 +97,7 @@ def validate_server_config(
       invalid (`{ is_valid: False }`), along with any errors or warnings encountered during validation.
     """
 
+    MetadataDefaults = AuthorizationServerMetadataDefaults
     errors: List[AuthServerConfigError] = []
     warnings: List[AuthServerConfigWarning] = []
     metadata = config.metadata
@@ -112,9 +113,8 @@ def validate_server_config(
         )
 
     # Check if 'authorization_code' grant type is supported
-    if (
-        not metadata.grant_types_supported
-        or "authorization_code" not in metadata.grant_types_supported
+    if "authorization_code" not in (
+        metadata.grant_types_supported or MetadataDefaults.grant_types_supported.value
     ):
         errors.append(
             _create_error(
