@@ -35,6 +35,14 @@ class AuthInfo(BaseModel):
     registered with the OAuth / OIDC provider.
 
     Some providers may use 'application ID' or similar terms instead of 'client ID'.
+
+    Note:
+    This value accept either `client_id` (RFC 9068) or `azp` claim for better compatibility.
+    While `client_id` is required by RFC 9068 for JWT access tokens, many providers (Auth0,
+    Microsoft, Google) may use or support `azp` claim.
+    
+    See Also:
+    https://github.com/mcp-auth/js/issues/28 for detailed discussion
     """
 
     scopes: List[str] = []
