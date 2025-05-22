@@ -3,7 +3,7 @@
 [![GitHub branch check runs](https://img.shields.io/github/check-runs/mcp-auth/python/master)](https://github.com/mcp-auth/python/actions?query=branch%3Amaster)
 [![codecov](https://codecov.io/gh/mcp-auth/python/graph/badge.svg?token=JXZ4C50SCV)](https://codecov.io/gh/mcp-auth/python)
 [![Stable Version](https://img.shields.io/pypi/v/mcpauth?label=stable)][PyPI Releases]
-[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/mcpauth)][PyPI]
+[![Required Python Version](https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2Fmcp-auth%2Fpython%2Fmaster%2Fpyproject.toml)][PyPI]
 [![PyPI - License](https://img.shields.io/pypi/l/mcpauth)](https://github.com/mcp-auth/python/blob/master/LICENSE)
 
 [Website]: https://mcp-auth.dev/
