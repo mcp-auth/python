@@ -126,7 +126,7 @@ bearer_auth = Middleware(mcp_auth.bearer_auth_middleware('jwt'))
 app = Starlette(
     routes=[
         # Add the metadata route (`/.well-known/oauth-authorization-server`)
-        mcp_auth.metadata_route(),
+        mcp_auth.metadata_route(), # pyright: ignore[reportDeprecated]
         # Protect the MCP server with the Bearer auth middleware
         Mount("/", app=mcp.sse_app(), middleware=[bearer_auth]),
     ],

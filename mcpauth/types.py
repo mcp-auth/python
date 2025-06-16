@@ -1,6 +1,25 @@
 from typing import Annotated, Dict, List, Optional, Protocol, Union, Any
 from pydantic import BaseModel, StringConstraints
 
+from .config import AuthServerConfig, ProtectedResourceMetadataBase
+
+
+class ResourceServerMetadata(ProtectedResourceMetadataBase):
+    """
+    The metadata for a resource server, extending the base protected resource metadata
+    to include full authorization server configurations.
+    """
+
+    authorization_servers: Optional[List[AuthServerConfig]] = None
+
+
+class ResourceServerConfig(BaseModel):
+    """
+    Configuration for a single protected resource server.
+    """
+
+    metadata: ResourceServerMetadata
+
 
 Record = Dict[str, Any]
 
