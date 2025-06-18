@@ -17,7 +17,7 @@ class MCPAuthHandler(ABC):
         Returns a router for serving either the legacy OAuth 2.0 Authorization Server Metadata or
         the OAuth 2.0 Protected Resource Metadata, depending on the configuration.
         """
-        ...
+        ...  # pragma: no cover
 
     @abstractmethod
     def get_token_verifier(self, resource: str) -> TokenVerifier:
@@ -25,4 +25,4 @@ class MCPAuthHandler(ABC):
         Resolves the appropriate TokenVerifier based on the provided resource.
         :param resource: The resource identifier for verifier lookup.
         """
-        ... 
+        ...  # pragma: no cover 

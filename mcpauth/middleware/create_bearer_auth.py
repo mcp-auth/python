@@ -106,7 +106,7 @@ def _handle_error(
     www_authenticate_header = BearerWWWAuthenticateHeader()
 
     if isinstance(error, (MCPAuthTokenVerificationException, MCPAuthBearerAuthException)):
-        www_authenticate_header.set_parameter_if_value_exists("error", error.code)
+        www_authenticate_header.set_parameter_if_value_exists("error", error.code.value)
         if error.message:
             www_authenticate_header.set_parameter_if_value_exists("error_description", error.message)
 

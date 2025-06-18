@@ -95,6 +95,33 @@ def test_init_duplicate_resource_id(mock_validate: Mock, mock_resource_config: R
     "mcpauth.auth.resource_server_handler.validate_server_config",
     return_value=type("ValidationResult", (), {"is_valid": True}),
 )
+def test_init_duplicate_auth_server(
+    mock_validate: Mock, mock_auth_server: AuthServerConfig
+):
+    """Test that ResourceServerHandler throws an error if an auth server is duplicated for a resource."""
+    config_with_duplicate_auth_server = RSC(
+        metadata=ResourceServerMetadata(
+            resource="https://my-api.com",
+            authorization_servers=[mock_auth_server, mock_auth_server],
+        )
+    )
+    with pytest.raises(MCPAuthAuthServerException) as excinfo:
+        ResourceServerHandler(
+            ResourceServerModeConfig(
+                protected_resources=[config_with_duplicate_auth_server]
+            )
+        )
+    assert excinfo.value.code == AuthServerExceptionCode.INVALID_SERVER_CONFIG
+    assert (
+        excinfo.value.cause["error_description"]  # type: ignore[reportGeneralTypeIssues]
+        == "The authorization server ('https://auth.example.com') for resource 'https://my-api.com' is duplicated."
+    )
+
+
+@patch(
+    "mcpauth.auth.resource_server_handler.validate_server_config",
+    return_value=type("ValidationResult", (), {"is_valid": True}),
+)
 def test_get_token_verifier_success(mock_validate: Mock, mock_resource_config: RSC):
     handler = ResourceServerHandler(
         ResourceServerModeConfig(protected_resources=mock_resource_config)

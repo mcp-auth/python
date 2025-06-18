@@ -124,6 +124,18 @@ def test_bearer_auth_middleware_calls_get_token_verifier_in_resource_mode(
             mock_get_verifier.assert_called_once_with(resource="https://api.example.com")
 
 
+def test_bearer_auth_middleware_throws_for_invalid_mode(
+    valid_server_config: AuthServerConfig,
+):
+    """Test that bearer_auth_middleware throws a ValueError for an invalid mode."""
+    auth = MCPAuth(server=valid_server_config)
+    with pytest.raises(
+        ValueError,
+        match="mode_or_verify must be 'jwt' or a callable function that verifies tokens.",
+    ):
+        auth.bearer_auth_middleware(mode_or_verify="invalid_mode")  # type: ignore
+
+
 @patch("mcpauth.auth.resource_server_handler.validate_server_config")
 def test_metadata_route_throws_in_resource_mode(
     mock_validate: MagicMock, valid_resource_config: ResourceServerConfig
@@ -165,6 +177,26 @@ def test_metadata_route_calls_handler_method(
 
 
 @patch(
+    "mcpauth.auth.authorization_server_handler.AuthorizationServerHandler.create_metadata_route"
+)
+@patch("mcpauth.auth.authorization_server_handler.validate_server_config")
+def test_metadata_route_throws_if_route_is_not_route_instance(
+    mock_validate: MagicMock,
+    mock_create_route: MagicMock,
+    valid_server_config: AuthServerConfig,
+):
+    """Test that metadata_route throws an error if the created route is not a Route instance."""
+    # Ensure the mock returns a router-like object with a routes attribute
+    # containing something that is not a Route instance
+    mock_create_route.return_value = MagicMock(routes=[MagicMock()])
+    auth = MCPAuth(server=valid_server_config)
+    with pytest.warns(DeprecationWarning):
+        with pytest.raises(IndexError, match="No metadata endpoint route was created"):
+            auth.metadata_route()  # pyright: ignore[reportDeprecated]
+    mock_create_route.assert_called_once()
+
+
+@patch(
     "mcpauth.auth.resource_server_handler.ResourceServerHandler.create_metadata_route"
 )
 @patch("mcpauth.auth.resource_server_handler.validate_server_config")
@@ -176,4 +208,20 @@ def test_resource_metadata_router_calls_handler_method(
     """Test that resource_metadata_router calls the handler's create_metadata_route method."""
     auth = MCPAuth(protected_resources=valid_resource_config)
     auth.resource_metadata_router()
-    mock_create_route.assert_called_once() 
+    mock_create_route.assert_called_once()
+
+
+@patch("mcpauth.middleware.create_bearer_auth.create_bearer_auth")
+def test_bearer_auth_middleware_with_callable_verifier(
+    mock_create_bearer_auth: MagicMock, valid_server_config: AuthServerConfig
+):
+    """Test that bearer_auth_middleware works with a callable verifier."""
+    auth = MCPAuth(server=valid_server_config)
+    verifier = MagicMock()
+    with patch("mcpauth.MCPAuthHandler.get_token_verifier"):
+        auth.bearer_auth_middleware(mode_or_verify=verifier)
+
+    mock_create_bearer_auth.assert_called_once()
+    # Check that the verifier is passed to create_bearer_auth
+    args, _ = mock_create_bearer_auth.call_args
+    assert args[0] == verifier 

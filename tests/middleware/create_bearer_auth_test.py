@@ -1,7 +1,7 @@
 from contextvars import ContextVar
 import json
 import pytest
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import MagicMock, AsyncMock, Mock
 from starlette.requests import Request
 from starlette.responses import Response, JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -18,7 +18,9 @@ from mcpauth.exceptions import (
     MCPAuthAuthServerException,
     MCPAuthConfigException,
     MCPAuthTokenVerificationExceptionCode,
+    MCPAuthBearerAuthException,
 )
+import pydantic
 
 
 class TestHandleBearerAuth:
@@ -55,6 +57,32 @@ class TestHandleBearerAuth:
             create_bearer_auth(
                 lambda _: None,  # type: ignore
                 BearerAuthConfig(issuer="not a valid url"),
+                auth_info,
+            )
+
+    def test_should_throw_error_if_issuer_is_not_string_or_callable(
+        self, auth_info: ContextVar[AuthInfo | None]
+    ):
+        with pytest.raises(pydantic.ValidationError):
+            create_bearer_auth(
+                lambda _: None,  # type: ignore
+                BearerAuthConfig(issuer=123),  # type: ignore
+                auth_info,
+            )
+
+    def test_should_raise_type_error_for_invalid_issuer_type(
+        self, auth_info: ContextVar[AuthInfo | None]
+    ):
+        """Test that create_bearer_auth raises TypeError for an invalid issuer type on a mock config."""
+        mock_config = Mock(spec=BearerAuthConfig)
+        mock_config.issuer = 123  # Invalid type
+
+        with pytest.raises(
+            TypeError, match="`issuer` must be either a string or a callable."
+        ):
+            create_bearer_auth(
+                lambda _: None,  # type: ignore
+                mock_config,
                 auth_info,
             )
 
@@ -287,6 +315,7 @@ class TestHandleBearerAuthMiddleware:
         ],
     ):
         mock_verify = MagicMock()
+        assert isinstance(auth_config[1].issuer, str)
         mock_verify.return_value = AuthInfo(
             issuer=auth_config[1].issuer,
             client_id="client-id",
@@ -333,6 +362,7 @@ class TestHandleBearerAuthMiddleware:
         ],
     ):
         mock_verify = MagicMock()
+        assert isinstance(auth_config[1].issuer, str)
         mock_verify.return_value = AuthInfo(
             issuer=auth_config[1].issuer,
             client_id="client-id",
@@ -379,6 +409,7 @@ class TestHandleBearerAuthMiddleware:
         ],
     ):
         mock_verify = MagicMock()
+        assert isinstance(auth_config[1].issuer, str)
         mock_verify.return_value = AuthInfo(
             issuer=auth_config[1].issuer,
             client_id="client-id",
@@ -643,3 +674,142 @@ class TestHandleBearerAuthMiddleware:
             },
         }
         mock_verify.assert_called_once_with("valid-token")
+
+    @pytest.mark.asyncio
+    async def test_should_include_resource_metadata_on_401_bearer_error(
+        self,
+        auth_info: ContextVar[AuthInfo | None],
+    ):
+        """
+        Test that the WWW-Authenticate header includes the resource_metadata URI when a
+        Bearer auth error (401) occurs and a resource is specified.
+        """
+        config = BearerAuthConfig(
+            issuer="https://correct-issuer.com",
+            resource="https://my-api.com",
+        )
+        mock_verify = MagicMock()
+        mock_verify.return_value = AuthInfo(
+            issuer="https://wrong-issuer.com",
+            client_id="client-id",
+            scopes=[],
+            token="valid-token",
+            subject="subject-id",
+            audience=None,
+            claims={},
+        )
+
+        MiddlewareClass = create_bearer_auth(mock_verify, config, auth_info)
+        middleware = MiddlewareClass(app=MagicMock())
+
+        request = Request(
+            scope={
+                "type": "http",
+                "headers": [(b"authorization", b"Bearer valid-token")],
+                "method": "GET",
+                "path": "/",
+            }
+        )
+
+        response = await middleware.dispatch(request, MagicMock())
+
+        assert response.status_code == 401
+        assert "WWW-Authenticate" in response.headers
+        assert (
+            'resource_metadata="https://my-api.com/.well-known/oauth-protected-resource"'
+            in response.headers["WWW-Authenticate"]
+        )
+
+    async def test_should_respond_with_error_if_callable_issuer_fails(
+        self,
+        auth_config: tuple[
+            VerifyAccessTokenFunction, BearerAuthConfig, ContextVar[AuthInfo | None]
+        ],
+    ):
+        """Test that an error is returned if a callable issuer fails validation."""
+        mock_verify = MagicMock()
+        mock_verify.return_value = AuthInfo(
+            issuer="https://some-issuer.com",
+            client_id="client-id",
+            scopes=[],
+            token="valid-token",
+            audience=None,
+            subject="subject-id",
+            claims={},
+        )
+
+        def failing_issuer_validator(issuer: str):
+            raise MCPAuthBearerAuthException(BearerAuthExceptionCode.INVALID_ISSUER)
+
+        config = BearerAuthConfig(
+            issuer=failing_issuer_validator,
+            resource="https://my-api.com",
+        )
+
+        MiddlewareClass = create_bearer_auth(mock_verify, config, auth_config[2])
+        middleware = MiddlewareClass(app=MagicMock())
+
+        request = Request(
+            scope={
+                "type": "http",
+                "headers": [(b"authorization", b"Bearer valid-token")],
+                "method": "GET",
+                "path": "/",
+            }
+        )
+
+        response = await middleware.dispatch(request, MagicMock())
+
+        assert response.status_code == 401
+        assert "WWW-Authenticate" in response.headers
+        assert (
+            f'error="{BearerAuthExceptionCode.INVALID_ISSUER.value}"'
+            in response.headers["WWW-Authenticate"]
+        )
+        assert (
+            'resource_metadata="https://my-api.com/.well-known/oauth-protected-resource"'
+            in response.headers["WWW-Authenticate"]
+        )
+
+    async def test_should_include_resource_metadata_on_token_verification_error(
+        self,
+        auth_info: ContextVar[AuthInfo | None],
+    ):
+        """
+        Test that the WWW-Authenticate header includes the resource_metadata URI when a
+        token verification error (401) occurs and a resource is specified.
+        """
+        config = BearerAuthConfig(
+            issuer="https://correct-issuer.com",
+            resource="https://my-api.com",
+        )
+        mock_verify = MagicMock(
+            side_effect=MCPAuthTokenVerificationException(
+                MCPAuthTokenVerificationExceptionCode.INVALID_TOKEN
+            )
+        )
+
+        MiddlewareClass = create_bearer_auth(mock_verify, config, auth_info)
+        middleware = MiddlewareClass(app=MagicMock())
+
+        request = Request(
+            scope={
+                "type": "http",
+                "headers": [(b"authorization", b"Bearer invalid-token")],
+                "method": "GET",
+                "path": "/",
+            }
+        )
+
+        response = await middleware.dispatch(request, MagicMock())
+
+        assert response.status_code == 401
+        assert "WWW-Authenticate" in response.headers
+        assert (
+            'resource_metadata="https://my-api.com/.well-known/oauth-protected-resource"'
+            in response.headers["WWW-Authenticate"]
+        )
+        assert (
+            f'error="{MCPAuthTokenVerificationExceptionCode.INVALID_TOKEN.value}"'
+            in response.headers["WWW-Authenticate"]
+        )
