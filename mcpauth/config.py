@@ -3,6 +3,101 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 
+class ProtectedResourceMetadataBase(BaseModel):
+    """
+    The base model for OAuth 2.0 Protected Resource Metadata.
+    """
+
+    resource: str
+    """
+    The protected resource's resource identifier.
+    """
+
+    jwks_uri: Optional[str] = None
+    """
+    URL of the protected resource's JSON Web Key (JWK) Set document. This document contains the public keys
+    that can be used to verify digital signatures of responses or data returned by this protected resource.
+    This differs from the authorization server's jwks_uri which is used for token validation. When the protected
+    resource signs its responses, clients can fetch these public keys to verify the authenticity and integrity
+    of the received data.
+    """
+
+    scopes_supported: Optional[List[str]] = None
+    """
+    List of scope values used in authorization requests to access this protected resource.
+    """
+
+    bearer_methods_supported: Optional[List[str]] = None
+    """
+    Supported methods for sending OAuth 2.0 bearer tokens. Values: ["header", "body", "query"].
+    """
+
+    resource_signing_alg_values_supported: Optional[List[str]] = None
+    """
+    JWS signing algorithms supported by the protected resource for signing resource responses.
+    """
+
+    resource_name: Optional[str] = None
+    """
+    Human-readable name of the protected resource for display to end users.
+    """
+
+    resource_documentation: Optional[str] = None
+    """
+    URL containing developer documentation for using the protected resource.
+    """
+
+    resource_policy_uri: Optional[str] = None
+    """
+    URL containing information about the protected resource's data usage requirements.
+    """
+
+    resource_tos_uri: Optional[str] = None
+    """
+    URL containing the protected resource's terms of service.
+    """
+
+    tls_client_certificate_bound_access_tokens: Optional[bool] = None
+    """
+    Whether the protected resource supports mutual-TLS client certificate-bound access tokens.
+    """
+
+    authorization_details_types_supported: Optional[List[str]] = None
+    """
+    Authorization details type values supported when using the authorization_details request parameter.
+    """
+
+    dpop_signing_alg_values_supported: Optional[List[str]] = None
+    """
+    JWS algorithms supported for validating DPoP proof JWTs.
+    """
+
+    dpop_bound_access_tokens_required: Optional[bool] = None
+    """
+    Whether the protected resource always requires DPoP-bound access tokens.
+    """
+
+    signed_metadata: Optional[str] = None
+    """
+    A signed JWT containing metadata parameters as claims. The JWT must be signed using JWS and include
+    an 'iss' claim. This field provides a way to cryptographically verify the authenticity of the metadata
+    itself. The signature can be verified using the public keys available at the `jwks_uri` endpoint.
+    When present, the values in this signed metadata take precedence over the corresponding plain
+    JSON values in this metadata document. This helps prevent tampering with the resource metadata.
+    """
+
+
+class ProtectedResourceMetadata(ProtectedResourceMetadataBase):
+    """
+    Pydantic model for OAuth 2.0 Protected Resource Metadata as defined in RFC 9207.
+    """
+
+    authorization_servers: Optional[List[str]] = None
+    """
+    List of OAuth authorization server issuer identifiers that can be used with this protected resource.
+    """
+
+
 class AuthorizationServerMetadata(BaseModel):
     """
     Pydantic model for OAuth 2.0 Authorization Server Metadata as defined in RFC 8414.

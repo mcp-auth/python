@@ -24,7 +24,7 @@ from mcpauth.exceptions import (
     MCPAuthBearerAuthException,
     BearerAuthExceptionCode,
 )
-from mcpauth.types import AuthInfo
+from mcpauth.types import AuthInfo, ResourceServerConfig, ResourceServerMetadata
 from mcpauth.utils import fetch_server_config
 from .service import TodoService
 
@@ -44,7 +44,22 @@ if auth_issuer == issuer_placeholder:
     )
 
 auth_server_config = fetch_server_config(auth_issuer, AuthServerType.OIDC)
-mcp_auth = MCPAuth(server=auth_server_config)
+resource_id = "https://todo-manager.mcp-auth.com/resource1"
+mcp_auth = MCPAuth(
+    protected_resources=[
+        ResourceServerConfig(
+            metadata=ResourceServerMetadata(
+                resource=resource_id,
+                authorization_servers=[auth_server_config],
+                scopes_supported=[
+                    "create:todos",
+                    "read:todos",
+                    "delete:todos",
+                ],
+            )
+        )
+    ]
+)
 
 def assert_user_id(auth_info: Optional[AuthInfo]) -> str:
     """Assert that auth_info contains a valid user ID and return it."""
@@ -122,12 +137,11 @@ def delete_todo(id: str) -> dict[str, Any]:
         return {"error": "Failed to delete todo"}
 
 # Create the middleware and app
-bearer_auth = Middleware(mcp_auth.bearer_auth_middleware('jwt'))
+bearer_auth = Middleware(mcp_auth.bearer_auth_middleware('jwt', resource=resource_id))
 app = Starlette(
     routes=[
-        # Add the metadata route (`/.well-known/oauth-authorization-server`)
-        mcp_auth.metadata_route(),
         # Protect the MCP server with the Bearer auth middleware
+        *mcp_auth.resource_metadata_router().routes,
         Mount("/", app=mcp.sse_app(), middleware=[bearer_auth]),
     ],
 ) 

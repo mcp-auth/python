@@ -11,3 +11,15 @@ from ._validate_server_config import (
     AuthServerConfigWarning as AuthServerConfigWarning,
     AuthServerConfigValidationResult as AuthServerConfigValidationResult,
 )
+from ._bearer_www_authenticate_header import BearerWWWAuthenticateHeader
+from ._create_resource_metadata_endpoint import create_resource_metadata_endpoint
+from ._transpile_resource_metadata import transpile_resource_metadata
+
+__all__ = [
+    "fetch_server_config",
+    "validate_server_config",
+    "create_verify_jwt",
+    "BearerWWWAuthenticateHeader",
+    "create_resource_metadata_endpoint",
+    "transpile_resource_metadata",
+]

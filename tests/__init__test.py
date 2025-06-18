@@ -1,75 +1,16 @@
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import patch, MagicMock
+from starlette.routing import Route
+
 from mcpauth import MCPAuth, MCPAuthAuthServerException, AuthServerExceptionCode
 from mcpauth.config import AuthServerConfig, AuthServerType, AuthorizationServerMetadata
-from mcpauth.types import AuthInfo
+from mcpauth.types import ResourceServerConfig, ResourceServerMetadata
 
 
-class TestMCPAuth:
-    def test_init_with_valid_config(self):
-        # Setup
-        server_config = AuthServerConfig(
-            type=AuthServerType.OAUTH,
-            metadata=AuthorizationServerMetadata(
-                issuer="https://example.com",
-                authorization_endpoint="https://example.com/oauth/authorize",
-                token_endpoint="https://example.com/oauth/token",
-                response_types_supported=["code"],
-                grant_types_supported=["authorization_code"],
-                code_challenge_methods_supported=["S256"],
-            ),
-        )
-
-        # Exercise
-        auth = MCPAuth(server=server_config)
-
-        # Verify
-        assert auth.server == server_config
-
-    def test_init_with_invalid_config(self):
-        # Setup
-        server_config = AuthServerConfig(
-            type=AuthServerType.OAUTH,
-            metadata=AuthorizationServerMetadata(
-                issuer="https://example.com",
-                authorization_endpoint="https://example.com/oauth/authorize",
-                token_endpoint="https://example.com/oauth/token",
-                response_types_supported=["token"],  # Invalid response type
-            ),
-        )
-
-        # Exercise & Verify
-        with pytest.raises(MCPAuthAuthServerException) as exc_info:
-            MCPAuth(server=server_config)
-
-        assert exc_info.value.code == AuthServerExceptionCode.INVALID_SERVER_CONFIG
-
-    @patch("mcpauth.logging.warning")
-    def test_init_with_warnings(self, mock_warning: MagicMock):
-        # Setup
-        server_config = AuthServerConfig(
-            type=AuthServerType.OAUTH,
-            metadata=AuthorizationServerMetadata(
-                issuer="https://example.com",
-                authorization_endpoint="https://example.com/oauth/authorize",
-                token_endpoint="https://example.com/oauth/token",
-                response_types_supported=["code"],
-                grant_types_supported=["authorization_code"],
-                code_challenge_methods_supported=["S256"],
-                # Missing registration_endpoint will cause a warning
-            ),
-        )
-
-        # Exercise
-        MCPAuth(server=server_config)
-
-        # Verify
-        assert mock_warning.called
-
-
-@pytest.mark.asyncio
-class TestOAuthMetadataEndpointAndRoute:
-    server_config = AuthServerConfig(
+@pytest.fixture
+def valid_server_config() -> AuthServerConfig:
+    """Fixture for a valid authorization server configuration."""
+    return AuthServerConfig(
         type=AuthServerType.OAUTH,
         metadata=AuthorizationServerMetadata(
             issuer="https://example.com",
@@ -81,157 +22,206 @@ class TestOAuthMetadataEndpointAndRoute:
         ),
     )
 
-    async def test_metadata_endpoint(self):
-        auth = MCPAuth(server=self.server_config)
 
-        options_request = MagicMock()
-        options_request.method = "OPTIONS"
-        options_response = await auth.metadata_endpoint()(options_request)
-        assert options_response.status_code == 204
-        assert options_response.headers["Access-Control-Allow-Origin"] == "*"
-        assert (
-            options_response.headers["Access-Control-Allow-Methods"] == "GET, OPTIONS"
+@pytest.fixture
+def valid_resource_config() -> ResourceServerConfig:
+    """Fixture for a valid resource server configuration."""
+    return ResourceServerConfig(
+        metadata=ResourceServerMetadata(
+            resource="https://api.example.com",
+            authorization_servers=[
+                AuthServerConfig(
+                    type=AuthServerType.OAUTH,
+                    metadata=AuthorizationServerMetadata(
+                        issuer="https://example.com",
+                        authorization_endpoint="https://example.com/oauth/authorize",
+                        token_endpoint="https://example.com/oauth/token",
+                        response_types_supported=["code"],
+                    ),
+                )
+            ],
         )
+    )
 
-        request = MagicMock()
-        request.method = "GET"
-        response = await auth.metadata_endpoint()(request)
-
-        assert response.status_code == 200
-        assert response.body == self.server_config.metadata.model_dump_json(
-            exclude_none=True
-        ).encode("utf-8")
-        assert response.headers["Access-Control-Allow-Origin"] == "*"
-        assert response.headers["Access-Control-Allow-Methods"] == "GET, OPTIONS"
-
-    async def test_metadata_route(self):
-        auth = MCPAuth(server=self.server_config)
-        route = auth.metadata_route()
-
-        assert route.path == "/.well-known/oauth-authorization-server"
-        assert route.methods == {"GET", "HEAD", "OPTIONS"}
-
-        # Mock a request to the route
-        request = MagicMock()
-        request.method = "GET"
-        response = await route.endpoint(request)
-        assert response.status_code == 200
-        assert response.body == self.server_config.metadata.model_dump_json(
-            exclude_none=True
-        ).encode("utf-8")
-        assert response.headers["Access-Control-Allow-Origin"] == "*"
-        assert response.headers["Access-Control-Allow-Methods"] == "GET, OPTIONS"
+def test_init_throws_if_no_config():
+    """Test that MCPAuth throws an error if no configuration is provided."""
+    with pytest.raises(MCPAuthAuthServerException) as exc_info:
+        MCPAuth()
+    assert exc_info.value.code == AuthServerExceptionCode.INVALID_SERVER_CONFIG
 
 
-class TestBearerAuthMiddleware:
-    def test_bearer_auth_middleware_jwt_mode(self):
-        # Setup
-        server_config = AuthServerConfig(
-            type=AuthServerType.OAUTH,
-            metadata=AuthorizationServerMetadata(
-                issuer="https://example.com",
-                authorization_endpoint="https://example.com/oauth/authorize",
-                token_endpoint="https://example.com/oauth/token",
-                jwks_uri="https://example.com/.well-known/jwks.json",
-                response_types_supported=["code"],
-                grant_types_supported=["authorization_code"],
-                code_challenge_methods_supported=["S256"],
-            ),
-        )
-        auth = MCPAuth(server=server_config)
+def test_init_throws_if_both_configs_provided(
+    valid_server_config: AuthServerConfig, valid_resource_config: ResourceServerConfig
+):
+    """Test that MCPAuth throws an error if both server and resource configs are provided."""
+    with pytest.raises(MCPAuthAuthServerException) as exc_info:
+        MCPAuth(server=valid_server_config, protected_resources=valid_resource_config)
+    assert exc_info.value.code == AuthServerExceptionCode.INVALID_SERVER_CONFIG
 
-        # Exercise
-        with patch("mcpauth.utils.create_verify_jwt") as mock_create_verify_jwt:
-            mock_create_verify_jwt.return_value = MagicMock()
-            middleware_class = auth.bearer_auth_middleware(
-                "jwt", required_scopes=["profile"]
-            )
 
-        # Verify
-        assert middleware_class is not None
-        mock_create_verify_jwt.assert_called_once_with(
-            "https://example.com/.well-known/jwks.json", leeway=60
-        )
+@patch("mcpauth.AuthorizationServerHandler")
+def test_init_instantiates_auth_server_handler(
+    mock_auth_handler: MagicMock, valid_server_config: AuthServerConfig
+):
+    """Test that MCPAuth instantiates AuthorizationServerHandler when server config is provided."""
+    MCPAuth(server=valid_server_config)
+    mock_auth_handler.assert_called_once()
 
-    @pytest.mark.asyncio
-    async def test_bearer_auth_middleware_custom_verify(self):
-        server_config = AuthServerConfig(
-            type=AuthServerType.OAUTH,
-            metadata=AuthorizationServerMetadata(
-                issuer="https://example.com",
-                authorization_endpoint="https://example.com/oauth/authorize",
-                token_endpoint="https://example.com/oauth/token",
-                response_types_supported=["code"],
-                grant_types_supported=["authorization_code"],
-                code_challenge_methods_supported=["S256"],
-            ),
-        )
-        auth = MCPAuth(server=server_config)
 
-        auth_info = AuthInfo(
-            token="valid_token",
-            issuer="https://example.com",
-            subject="1234567890",
-            scopes=["profile"],
-            claims={},
-        )
-        custom_verify = MagicMock()
-        custom_verify.return_value = auth_info
+@patch("mcpauth.ResourceServerHandler")
+def test_init_instantiates_resource_server_handler(
+    mock_resource_handler: MagicMock, valid_resource_config: ResourceServerConfig
+):
+    """Test that MCPAuth instantiates ResourceServerHandler when resource config is provided."""
+    MCPAuth(protected_resources=valid_resource_config)
+    mock_resource_handler.assert_called_once()
 
-        middleware_class = auth.bearer_auth_middleware(
-            custom_verify, required_scopes=["profile"]
-        )
 
-        mock_request = MagicMock()
-        mock_request.headers = {"Authorization": "Bearer valid_token"}
-        middleware_instance = middleware_class(MagicMock())
-        await middleware_instance.dispatch(mock_request, AsyncMock())
-        assert auth.auth_info == auth_info
+def test_bearer_auth_middleware_throws_if_resource_missing_in_resource_mode(
+    valid_resource_config: ResourceServerConfig,
+):
+    """Test that bearer_auth_middleware throws an error if resource is not specified in resource server mode."""
+    # We need to mock the handler to be a ResourceServerHandler instance
+    auth = MCPAuth(protected_resources=valid_resource_config)
+    with pytest.raises(MCPAuthAuthServerException) as excinfo:
+        auth.bearer_auth_middleware(mode_or_verify="jwt")
+    assert excinfo.value.code == AuthServerExceptionCode.INVALID_SERVER_CONFIG
 
-    def test_bearer_auth_middleware_jwt_without_jwks_uri(self):
-        # Setup
-        server_config = AuthServerConfig(
-            type=AuthServerType.OAUTH,
-            metadata=AuthorizationServerMetadata(
-                issuer="https://example.com",
-                authorization_endpoint="https://example.com/oauth/authorize",
-                token_endpoint="https://example.com/oauth/token",
-                # No jwks_uri
-                response_types_supported=["code"],
-                grant_types_supported=["authorization_code"],
-                code_challenge_methods_supported=["S256"],
-            ),
-        )
-        auth = MCPAuth(server=server_config)
 
-        # Exercise & Verify
-        with pytest.raises(MCPAuthAuthServerException) as exc_info:
-            auth.bearer_auth_middleware("jwt", required_scopes=["profile"])
+def test_bearer_auth_middleware_calls_get_token_verifier_in_auth_server_mode(
+    valid_server_config: AuthServerConfig,
+):
+    """Test that bearer_auth_middleware calls get_token_verifier on its handler."""
+    with patch(
+        "mcpauth.auth.authorization_server_handler.validate_server_config"
+    ) as mock_validate:
+        mock_validate.return_value.is_valid = True
+        auth = MCPAuth(server=valid_server_config)
+        # Spy on the handler's method
+        with patch.object(
+            auth._handler, "get_token_verifier", return_value=MagicMock()  # type: ignore[reportPrivateUsage]
+        ) as mock_get_verifier:
+            auth.bearer_auth_middleware(mode_or_verify="jwt")
+            mock_get_verifier.assert_called_once_with(resource="")
 
-        assert exc_info.value.code == AuthServerExceptionCode.MISSING_JWKS_URI
 
-    def test_bearer_auth_middleware_invalid_mode(self):
-        # Setup
-        server_config = AuthServerConfig(
-            type=AuthServerType.OAUTH,
-            metadata=AuthorizationServerMetadata(
-                issuer="https://example.com",
-                authorization_endpoint="https://example.com/oauth/authorize",
-                token_endpoint="https://example.com/oauth/token",
-                response_types_supported=["code"],
-                grant_types_supported=["authorization_code"],
-                code_challenge_methods_supported=["S256"],
-            ),
-        )
-        auth = MCPAuth(server=server_config)
-
-        # Exercise & Verify
-        with pytest.raises(ValueError) as exc_info:
+def test_bearer_auth_middleware_calls_get_token_verifier_in_resource_mode(
+    valid_resource_config: ResourceServerConfig,
+):
+    """Test that bearer_auth_middleware calls get_token_verifier on its handler."""
+    with patch(
+        "mcpauth.auth.resource_server_handler.validate_server_config"
+    ) as mock_validate:
+        mock_validate.return_value.is_valid = True
+        auth = MCPAuth(protected_resources=valid_resource_config)
+        # Spy on the handler's method
+        with patch.object(
+            auth._handler, "get_token_verifier", return_value=MagicMock()  # type: ignore[reportPrivateUsage]
+        ) as mock_get_verifier:
             auth.bearer_auth_middleware(
-                "invalid_mode",  # type: ignore
-                required_scopes=["profile"],
+                mode_or_verify="jwt", resource="https://api.example.com"
             )
+            mock_get_verifier.assert_called_once_with(resource="https://api.example.com")
 
-        assert "mode_or_verify must be 'jwt' or a callable function" in str(
-            exc_info.value
-        )
+
+def test_bearer_auth_middleware_throws_for_invalid_mode(
+    valid_server_config: AuthServerConfig,
+):
+    """Test that bearer_auth_middleware throws a ValueError for an invalid mode."""
+    auth = MCPAuth(server=valid_server_config)
+    with pytest.raises(
+        ValueError,
+        match="mode_or_verify must be 'jwt' or a callable function that verifies tokens.",
+    ):
+        auth.bearer_auth_middleware(mode_or_verify="invalid_mode")  # type: ignore
+
+
+@patch("mcpauth.auth.resource_server_handler.validate_server_config")
+def test_metadata_route_throws_in_resource_mode(
+    mock_validate: MagicMock, valid_resource_config: ResourceServerConfig
+):
+    """Test that metadata_route throws an error in resource server mode."""
+    auth = MCPAuth(protected_resources=valid_resource_config)
+    with pytest.raises(MCPAuthAuthServerException):
+        with pytest.warns(DeprecationWarning):
+            auth.metadata_route() # pyright: ignore[reportDeprecated]
+
+
+@patch("mcpauth.auth.authorization_server_handler.validate_server_config")
+def test_resource_metadata_router_throws_in_auth_server_mode(
+    mock_validate: MagicMock, valid_server_config: AuthServerConfig
+):
+    """Test that resource_metadata_router throws an error in authorization server mode."""
+    auth = MCPAuth(server=valid_server_config)
+    with pytest.raises(MCPAuthAuthServerException):
+        auth.resource_metadata_router()
+
+
+@patch(
+    "mcpauth.auth.authorization_server_handler.AuthorizationServerHandler.create_metadata_route"
+)
+@patch("mcpauth.auth.authorization_server_handler.validate_server_config")
+def test_metadata_route_calls_handler_method(
+    mock_validate: MagicMock,
+    mock_create_route: MagicMock,
+    valid_server_config: AuthServerConfig,
+):
+    """Test that metadata_route calls the handler's create_metadata_route method."""
+    # Ensure the mock returns a router-like object with a routes attribute
+    mock_route_instance = MagicMock(spec=Route)
+    mock_create_route.return_value = MagicMock(routes=[mock_route_instance])
+    auth = MCPAuth(server=valid_server_config)
+    with pytest.warns(DeprecationWarning):
+        auth.metadata_route() # pyright: ignore[reportDeprecated]
+    mock_create_route.assert_called_once()
+
+
+@patch(
+    "mcpauth.auth.authorization_server_handler.AuthorizationServerHandler.create_metadata_route"
+)
+@patch("mcpauth.auth.authorization_server_handler.validate_server_config")
+def test_metadata_route_throws_if_route_is_not_route_instance(
+    mock_validate: MagicMock,
+    mock_create_route: MagicMock,
+    valid_server_config: AuthServerConfig,
+):
+    """Test that metadata_route throws an error if the created route is not a Route instance."""
+    # Ensure the mock returns a router-like object with a routes attribute
+    # containing something that is not a Route instance
+    mock_create_route.return_value = MagicMock(routes=[MagicMock()])
+    auth = MCPAuth(server=valid_server_config)
+    with pytest.warns(DeprecationWarning):
+        with pytest.raises(IndexError, match="No metadata endpoint route was created"):
+            auth.metadata_route()  # pyright: ignore[reportDeprecated]
+    mock_create_route.assert_called_once()
+
+
+@patch(
+    "mcpauth.auth.resource_server_handler.ResourceServerHandler.create_metadata_route"
+)
+@patch("mcpauth.auth.resource_server_handler.validate_server_config")
+def test_resource_metadata_router_calls_handler_method(
+    mock_validate: MagicMock,
+    mock_create_route: MagicMock,
+    valid_resource_config: ResourceServerConfig,
+):
+    """Test that resource_metadata_router calls the handler's create_metadata_route method."""
+    auth = MCPAuth(protected_resources=valid_resource_config)
+    auth.resource_metadata_router()
+    mock_create_route.assert_called_once()
+
+
+@patch("mcpauth.middleware.create_bearer_auth.create_bearer_auth")
+def test_bearer_auth_middleware_with_callable_verifier(
+    mock_create_bearer_auth: MagicMock, valid_server_config: AuthServerConfig
+):
+    """Test that bearer_auth_middleware works with a callable verifier."""
+    auth = MCPAuth(server=valid_server_config)
+    verifier = MagicMock()
+    with patch("mcpauth.MCPAuthHandler.get_token_verifier"):
+        auth.bearer_auth_middleware(mode_or_verify=verifier)
+
+    mock_create_bearer_auth.assert_called_once()
+    # Check that the verifier is passed to create_bearer_auth
+    args, _ = mock_create_bearer_auth.call_args
+    assert args[0] == verifier 
