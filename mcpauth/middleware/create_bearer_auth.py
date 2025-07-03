@@ -177,7 +177,7 @@ def create_bearer_auth(
             result = urlparse(config.issuer)
             if not all([result.scheme, result.netloc]):
                 raise ValueError("Invalid URL")
-        except:
+        except ValueError:
             raise TypeError("`issuer` must be a valid URL.")
     elif not callable(config.issuer):
         raise TypeError("`issuer` must be either a string or a callable.")

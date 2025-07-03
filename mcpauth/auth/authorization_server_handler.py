@@ -14,7 +14,7 @@ from .token_verifier import TokenVerifier
 
 class AuthServerModeConfig:
     """
-    Configuration for the legacy, MCP server as authorization server mode.
+    Configuration for the legacy, MCP-server-as-authorization-server mode.
     """
 
     def __init__(self, server: AuthServerConfig):

@@ -19,7 +19,7 @@ from .token_verifier import TokenVerifier
 
 class ResourceServerModeConfig:
     """
-    Configuration for the MCP server as resource server mode.
+    Configuration for the MCP-server-as-resource-server mode.
     """
 
     def __init__(
