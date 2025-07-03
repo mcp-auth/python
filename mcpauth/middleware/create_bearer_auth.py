@@ -1,5 +1,5 @@
 from contextvars import ContextVar
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Union
 from urllib.parse import urlparse
 import logging
 from pydantic import BaseModel
@@ -17,6 +17,7 @@ from ..exceptions import (
     MCPAuthBearerAuthExceptionDetails,
 )
 from ..types import AuthInfo, VerifyAccessTokenFunction, Record
+from ..utils import BearerWWWAuthenticateHeader, create_resource_metadata_endpoint
 
 
 class BearerAuthConfig(BaseModel):
@@ -24,9 +25,9 @@ class BearerAuthConfig(BaseModel):
     Configuration for the Bearer auth handler.
     """
 
-    issuer: str
+    issuer: Union[str, Callable[[str], None]]
     """
-    The expected issuer of the access token. This should be a valid URL.
+    The expected issuer of the access token. This should be a valid URL or a validation function.
     """
 
     audience: Optional[str] = None
@@ -38,6 +39,13 @@ class BearerAuthConfig(BaseModel):
     """
     An array of required scopes that the access token must have. If not provided, no scope check is
     performed.
+    """
+
+    resource: Optional[str] = None
+    """
+    The identifier of the protected resource. When provided, the handler will use the
+    authorization servers configured for this resource to validate the received token.
+    It's required when using the handler with a `protectedResources` configuration.
     """
 
     show_error_details: bool = False
@@ -81,25 +89,51 @@ def get_bearer_token_from_headers(headers: Headers) -> str:
 
 
 def _handle_error(
-    error: Exception, show_error_details: bool = False
-) -> tuple[int, Dict[str, Any]]:
+    error: Exception, resource: Optional[str] = None, show_error_details: bool = False
+) -> tuple[int, Dict[str, Any], Dict[str, str]]:
     """
     Handle errors from the Bearer auth process.
 
     Args:
       error: The exception that was caught.
+      resource: The resource identifier for which the auth failed.
       show_error_details: Whether to include detailed error information in the response.
 
     Returns:
-      A tuple of (status_code, response_body).
+      A tuple of (status_code, response_body, headers).
     """
+    headers: Dict[str, str] = {}
+    www_authenticate_header = BearerWWWAuthenticateHeader()
+
+    if isinstance(error, (MCPAuthTokenVerificationException, MCPAuthBearerAuthException)):
+        www_authenticate_header.set_parameter_if_value_exists("error", error.code.value)
+        if error.message:
+            www_authenticate_header.set_parameter_if_value_exists("error_description", error.message)
+
+    resource_metadata_endpoint = (
+        create_resource_metadata_endpoint(resource) if resource else None
+    )
+
     if isinstance(error, MCPAuthTokenVerificationException):
-        return 401, error.to_json(show_error_details)
+        if resource_metadata_endpoint:
+            www_authenticate_header.set_parameter_if_value_exists(
+                "resource_metadata", resource_metadata_endpoint
+            )
+        headers[www_authenticate_header.header_name] = www_authenticate_header.to_string()
+        return 401, error.to_json(show_error_details), headers
 
     if isinstance(error, MCPAuthBearerAuthException):
-        if error.code == BearerAuthExceptionCode.MISSING_REQUIRED_SCOPES:
-            return 403, error.to_json(show_error_details)
-        return 401, error.to_json(show_error_details)
+        status_code = (
+            403
+            if error.code == BearerAuthExceptionCode.MISSING_REQUIRED_SCOPES
+            else 401
+        )
+        if status_code == 401 and resource_metadata_endpoint:
+            www_authenticate_header.set_parameter_if_value_exists(
+                "resource_metadata", resource_metadata_endpoint
+            )
+        headers[www_authenticate_header.header_name] = www_authenticate_header.to_string()
+        return status_code, error.to_json(show_error_details), headers
 
     if isinstance(error, (MCPAuthAuthServerException, MCPAuthConfigException)):
         response: Record = {
@@ -108,7 +142,7 @@ def _handle_error(
         }
         if show_error_details:
             response["cause"] = error.to_json()
-        return 500, response
+        return 500, response, headers
 
     # Re-raise other errors
     raise error
@@ -138,12 +172,15 @@ def create_bearer_auth(
             "`verify_access_token` must be a function that takes a token and returns an `AuthInfo` object."
         )
 
-    try:
-        result = urlparse(config.issuer)
-        if not all([result.scheme, result.netloc]):
-            raise ValueError("Invalid URL")
-    except:
-        raise TypeError("`issuer` must be a valid URL.")
+    if isinstance(config.issuer, str):
+        try:
+            result = urlparse(config.issuer)
+            if not all([result.scheme, result.netloc]):
+                raise ValueError("Invalid URL")
+        except ValueError:
+            raise TypeError("`issuer` must be a valid URL.")
+    elif not callable(config.issuer):
+        raise TypeError("`issuer` must be either a string or a callable.")
 
     class BearerAuthMiddleware(BaseHTTPMiddleware):
         """
@@ -169,7 +206,9 @@ def create_bearer_auth(
                 token = get_bearer_token_from_headers(request.headers)
                 auth_info = verify_access_token(token)
 
-                if auth_info.issuer != config.issuer:
+                if callable(config.issuer):
+                    config.issuer(auth_info.issuer)
+                elif auth_info.issuer != config.issuer:
                     details = MCPAuthBearerAuthExceptionDetails(
                         expected=config.issuer, actual=auth_info.issuer
                     )
@@ -222,9 +261,9 @@ def create_bearer_auth(
 
             except Exception as error:
                 logging.error(f"Error during Bearer auth: {error}")
-                status_code, response_body = _handle_error(
-                    error, config.show_error_details
+                status_code, response_body, headers = _handle_error(
+                    error, config.resource, config.show_error_details
                 )
-                return JSONResponse(status_code=status_code, content=response_body)
+                return JSONResponse(status_code=status_code, content=response_body, headers=headers)
 
     return BearerAuthMiddleware
