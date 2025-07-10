@@ -65,6 +65,7 @@ class TestFetchServerConfigByWellKnownUrl:
             "issuer": sample_issuer,
             "authorization_endpoint": "https://example.com/oauth/authorize",
             "token_endpoint": "https://example.com/oauth/token",
+            "scopes_supported": ["scope1", "scope2", "scope3"],
         }
 
         responses.add(responses.GET, url=sample_well_known_url, json=sample_response)
@@ -83,6 +84,7 @@ class TestFetchServerConfigByWellKnownUrl:
         )
         assert config.metadata.token_endpoint == "https://example.com/oauth/token"
         assert config.metadata.response_types_supported == ["code"]
+        assert config.metadata.scopes_supported == ["scope1", "scope2", "scope3"]
 
     @responses.activate
     def test_fetch_server_config_oauth_success(self):
@@ -144,6 +146,7 @@ class TestFetchServerConfigByWellKnownUrl:
             "authorization_endpoint": "https://example.com/authorize",
             "token_endpoint": "https://example.com/token",
             "response_types_supported": ["code"],
+            "scopes_supported": ["openid", "profile", "email"],
         }
 
         responses.add(
@@ -159,6 +162,7 @@ class TestFetchServerConfigByWellKnownUrl:
         assert config.metadata.authorization_endpoint == "https://example.com/authorize"
         assert config.metadata.token_endpoint == "https://example.com/token"
         assert config.metadata.response_types_supported == ["code"]
+        assert config.metadata.scopes_supported == ["openid", "profile", "email"]
 
     @responses.activate
     def test_fetch_server_config_oidc_with_path_success(self):
