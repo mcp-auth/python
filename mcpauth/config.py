@@ -138,7 +138,12 @@ class AuthorizationServerMetadata(BaseModel):
     [[RFC7591](https://www.rfc-editor.org/rfc/rfc7591)].
     """
 
-    scope_supported: Optional[List[str]] = None
+    scopes_supported: Optional[List[str]] = None
+    """
+    JSON array containing a list of the OAuth 2.0 `scope` values that this authorization
+    server supports.
+    [[RFC8414](https://datatracker.ietf.org/doc/html/rfc8414#section-2)]
+    """
 
     response_types_supported: List[str]
     """
