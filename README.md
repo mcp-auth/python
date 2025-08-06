@@ -16,7 +16,7 @@ The MCP spec [requires OAuth 2.1 and other RFCs](https://modelcontextprotocol.io
 
 ### Is my provider supported?
 
-Check out the [MCP-compatible providers](https://mcp-auth.dev/docs/provider-list) to see which providers are supported. It also includes a tool for real-time checking of provider compatibility.
+Check out the [MCP-compatible providers](https://mcp-auth.dev/provider-list) to see which providers are supported. It also includes a tool for real-time checking of provider compatibility.
 
 ### Installation
 
