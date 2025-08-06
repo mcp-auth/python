@@ -44,7 +44,7 @@ if auth_issuer == issuer_placeholder:
     )
 
 auth_server_config = fetch_server_config(auth_issuer, AuthServerType.OIDC)
-resource_id = "https://todo-manager.mcp-auth.com/resource1"
+resource_id = "http://localhost:3001"
 mcp_auth = MCPAuth(
     protected_resources=[
         ResourceServerConfig(
