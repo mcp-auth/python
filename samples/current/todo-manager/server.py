@@ -12,6 +12,8 @@ information on how to use this server.
 """
 
 import os
+import contextlib
+
 from typing import Any, List, Optional
 from mcp.server.fastmcp import FastMCP
 from starlette.applications import Starlette
@@ -29,7 +31,7 @@ from mcpauth.utils import fetch_server_config
 from .service import TodoService
 
 # Initialize the FastMCP server
-mcp = FastMCP("Todo Manager")
+mcp = FastMCP(name="Todo Manager", stateless_http=True)
 
 # Initialize the todo service
 todo_service = TodoService()
@@ -44,7 +46,7 @@ if auth_issuer == issuer_placeholder:
     )
 
 auth_server_config = fetch_server_config(auth_issuer, AuthServerType.OIDC)
-resource_id = "http://localhost:3001"
+resource_id = "http://localhost:3001/mcp"
 mcp_auth = MCPAuth(
     protected_resources=[
         ResourceServerConfig(
@@ -136,12 +138,19 @@ def delete_todo(id: str) -> dict[str, Any]:
     else:
         return {"error": "Failed to delete todo"}
 
+@contextlib.asynccontextmanager
+async def lifespan(app: Starlette):
+    async with contextlib.AsyncExitStack() as stack:
+        await stack.enter_async_context(mcp.session_manager.run())
+        yield
+
 # Create the middleware and app
 bearer_auth = Middleware(mcp_auth.bearer_auth_middleware('jwt', resource=resource_id))
 app = Starlette(
     routes=[
         # Protect the MCP server with the Bearer auth middleware
         *mcp_auth.resource_metadata_router().routes,
-        Mount("/", app=mcp.sse_app(), middleware=[bearer_auth]),
+        Mount("/", app=mcp.streamable_http_app(), middleware=[bearer_auth]),
     ],
+    lifespan=lifespan,
 ) 
